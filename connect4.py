@@ -121,6 +121,9 @@ class GUI:
 class Game:
     def __init__(self, n_cols: int = 7, n_rows: int = 6,
                  n_players: int = 2, n_connect: int = 4):
+        assert n_cols >= 2 and n_rows >= 2 and n_players >= 2 and n_connect >= 2
+        assert n_connect <= max(n_cols, n_rows)
+
         self.n_cols = n_cols
         self.n_rows = n_rows
         self.n_players = n_players
@@ -138,29 +141,30 @@ class Game:
         self.board[row][col] = self.turn
         self.heights[col] += 1
         self.gui.redraw_board()
+        this_turn = self.turn
         self.turn = self.turn % self.n_players + 1
-        if self._check_win(row, col):
+        if self._check_win(row, col, this_turn):
             return TurnResult.WIN
         elif all(height == self.n_rows for height in self.heights):
             return TurnResult.DRAW
         else:
             return TurnResult.CONTINUE
 
-    def _check_win(self, row: int, col: int) -> bool:
+    def _check_win(self, row: int, col: int, player: int) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
             count = 1
             for i in range(1, self.n_connect):
                 r = row + i * dr
                 c = col + i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == self.turn:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == player:
                     count += 1
                 else:
                     break
             for i in range(1, self.n_connect):
                 r = row - i * dr
                 c = col - i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == self.turn:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == player:
                     count += 1
                 else:
                     break

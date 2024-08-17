@@ -17,9 +17,13 @@ SIDE = LEFT = 2
 RIGHT = 3
 
 
+# adapted from https://sashamaps.net/docs/resources/20-colors/
+COLORS = ['red', 'yellow', '#4363d8', '#3cb44b', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#9fef35', '#469990', '#dcbeff', '#800000', '#aaffe3', '#808000', '#ffd8b1', '#000075', '#606060', '#000000']
+
 class GUI:
-    def __init__(self, game: 'Game', n_cols: int, n_rows: int, tile_size: int = 100, bg_color="gray",
-                 outline_color="white", window_bg_color="gray", player_colors=("red", "yellow")):
+    def __init__(self, game: 'Game', n_cols: int, n_rows: int, tile_size: int = 100,
+                 tile_bg_color: str = "#909090", outline_color: str = "white",
+                 window_bg_color: str = "#909090", player_colors: tp.List[str] = COLORS):
         self.MIN_TILE_SIZE = 50
         self.BOARD_TOP_EXTRA_MARGIN = 0.1
         self.BOARD_MARGIN = 0.05
@@ -42,7 +46,7 @@ class GUI:
                                                       + self.BOARD_TOP_EXTRA_MARGIN))
 
         self.window_bg_color = window_bg_color
-        self.tile_bg_color = bg_color
+        self.tile_bg_color = tile_bg_color
         self.board_outline_color = outline_color
         self.tile_outline_color = outline_color
         self.state_color = [self.tile_bg_color, *player_colors]
@@ -120,7 +124,7 @@ class GUI:
 
 class Game:
     def __init__(self, n_cols: int = 7, n_rows: int = 6,
-                 n_players: int = 2, n_connect: int = 4):
+                 n_players: int = 20, n_connect: int = 4):
         assert n_cols >= 2 and n_rows >= 2 and n_players >= 2 and n_connect >= 2
         assert n_connect <= max(n_cols, n_rows)
 

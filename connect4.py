@@ -1,9 +1,13 @@
 import tkinter as tk
 import typing as tp
+import enum
 
 
-Player = tp.Literal[1, 2]
 Side = tp.Literal[0, 1, 2, 3]
+class TurnResult(enum.Enum):
+    CONTINUE = 0
+    WIN = 1
+    INVALID = 2
 
 
 TOP = 0
@@ -13,7 +17,7 @@ RIGHT = 3
 
 
 class GUI:
-    def __init__(self, n_cols: int = 7, n_rows: int = 6, tile_size: int = 100, bg_color="gray",
+    def __init__(self, game: 'Game', n_cols: int, n_rows: int, tile_size: int = 100, bg_color="gray",
                  outline_color="white", window_bg_color="gray", player_colors=("red", "yellow")):
         self.MIN_TILE_SIZE = 50
         self.BOARD_TOP_EXTRA_MARGIN = 0.1
@@ -26,6 +30,7 @@ class GUI:
         self.MIN_WINDOW_HEIGHT = 350
         self.WINDOW_TITLE = "Connect 4"
 
+        self.game = game
         self.n_cols = n_cols
         self.n_rows = n_rows
         self.tile_size = tile_size
@@ -39,6 +44,7 @@ class GUI:
         self.tile_bg_color = bg_color
         self.board_outline_color = outline_color
         self.tile_outline_color = outline_color
+        self.state_color = [self.tile_bg_color, *player_colors]
 
         self.root = tk.Tk()
         self.root.title(self.WINDOW_TITLE)
@@ -47,9 +53,6 @@ class GUI:
         self.root_frame = tk.Frame(self.root)
         self.root_frame.pack(fill="both", expand=True)
         self.root_frame.config(bg=self.window_bg_color)
-
-        self.state_color = [self.tile_bg_color, *player_colors]
-        self.tile_states = [[0 for _ in range(self.n_cols)] for _ in range(self.n_rows)]
 
         self._draw_board()
         self.root.bind("<Configure>", self._resize_window)
@@ -93,8 +96,8 @@ class GUI:
                                                    (col + 1) * self.tile_size, (row + 1) * self.tile_size,
                                                    fill=self.tile_bg_color, outline=self.tile_outline_color,
                                                    tags=("tile_part"))
-                if self.tile_states[row][col] != 0:
-                    self._draw_circle(row, col, self.state_color[self.tile_states[row][col]])
+                if self.game.board[row][col] != 0:
+                    self._draw_circle(row, col, self.state_color[self.game.board[row][col]])
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
 
     def _draw_circle(self, row, col, color):
@@ -108,9 +111,54 @@ class GUI:
         col = event.x // self.tile_size
         row = event.y // self.tile_size
         if 0 <= row < self.n_rows and 0 <= col < self.n_cols:
-            self.tile_states[row][col] = 1 - self.tile_states[row][col]
+            self.game.board[row][col] = 1 - self.game.board[row][col]
             self.redraw_board()
 
 
+class Game:
+    def __init__(self, n_cols: int = 7, n_rows: int = 6,
+                 n_players: int = 2, n_connect: int = 4):
+        self.n_cols = n_cols
+        self.n_rows = n_rows
+        self.n_players = n_players
+        self.n_connect = n_connect
+        self.board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
+        self.heights = [0 for _ in range(n_cols)]
+        self.turn = 1
+        self.gui = GUI(self, n_cols, n_rows)
+
+    def place(self, col: int) -> TurnResult:
+        row = self.n_rows - self.heights[col] - 1
+        if row < 0:
+            return TurnResult.INVALID
+        self.board[row][col] = self.turn
+        if self._check_win(row, col):
+            return TurnResult.WIN
+        self.turn = (self.turn + 1) % self.n_players + 1
+        return TurnResult.CONTINUE
+
+    def _check_win(self, row: int, col: int) -> bool:
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        for dr, dc in directions:
+            count = 1
+            for i in range(1, self.n_connect):
+                r = row + i * dr
+                c = col + i * dc
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == self.turn:
+                    count += 1
+                else:
+                    break
+            for i in range(1, self.n_connect):
+                r = row - i * dr
+                c = col - i * dc
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == self.turn:
+                    count += 1
+                else:
+                    break
+            if count >= self.n_connect:
+                return True
+        return False
+
+
 if __name__ == "__main__":
-    GUI()
+    Game()

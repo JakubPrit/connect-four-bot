@@ -50,7 +50,7 @@ class GUI:
             print("Tile size: {}x{}".format(self.tile_size, self.tile_size))
             print("Board size: {}x{}".format(self.board_width, self.board_height))
             self.board_canvas.delete("all")
-            del self.board_canvas
+            self.board_frame.destroy()
             self.create_board()
 
     def create_board(self):

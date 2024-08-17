@@ -7,8 +7,9 @@ class GUI:
                  tile_size=50, tile_padding=5, tile_outline_width=2):
         self.n_cols = n_cols
         self.n_rows = n_rows
-
         self.tile_size = tile_size
+        self.tile_padding = tile_padding
+        self.tile_outline_width = tile_outline_width
         self.board_width = self.tile_size * n_cols
         self.board_height = self.tile_size * n_rows
 
@@ -36,11 +37,7 @@ class GUI:
 
     def create_board(self):
         self.board_canvas = tk.Canvas(self.root, width=self.board_width, height=self.board_height)
-        self.board_canvas.pack(expand=False, anchor="center")
         self.board_canvas.config(width=self.board_width, height=self.board_height)
-        # self.root.update_idletasks() 
-        print(self.board_width, self.board_height,
-              self.board_canvas.winfo_width(), self.board_canvas.winfo_height())
         self.board_canvas.place(anchor="center", relx=0.5, rely=0.5)
 
         for i in range(self.n_cols):
@@ -53,11 +50,11 @@ class GUI:
 
 
     def draw_circle(self, col, row, color):
-        x0 = col * self.tile_size
-        y0 = row * self.tile_size
-        x1 = (col + 1) * self.tile_size
-        y1 = (row + 1) * self.tile_size
-        self.board_canvas.create_oval(x0, y0, x1, y1, fill=color, outline=self.tile_outline_color)
+        x0 = col * self.tile_size + self.tile_padding
+        y0 = row * self.tile_size + self.tile_padding
+        x1 = (col + 1) * self.tile_size - self.tile_padding
+        y1 = (row + 1) * self.tile_size - self.tile_padding
+        self.board_canvas.create_oval(x0, y0, x1, y1, fill=color)
 
 
 if __name__ == "__main__":

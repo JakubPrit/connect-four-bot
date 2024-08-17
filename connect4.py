@@ -92,22 +92,24 @@ class GUI:
                 self.board_canvas.create_rectangle(col * self.tile_size, row * self.tile_size,
                                                    (col + 1) * self.tile_size, (row + 1) * self.tile_size,
                                                    fill=self.tile_bg_color, outline=self.tile_outline_color,
-                                                   tags="tile")
+                                                   tags=("tile_part"))
                 if self.tile_states[row][col] != 0:
                     self._draw_circle(row, col, self.state_color[self.tile_states[row][col]])
-        self.board_canvas.tag_bind("tile", "<Button-1>", self._on_tile_click)
+        self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
 
     def _draw_circle(self, row, col, color):
         x0 = col * self.tile_size + self.tile_padding
         y0 = row * self.tile_size + self.tile_padding
         x1 = (col + 1) * self.tile_size - self.tile_padding
         y1 = (row + 1) * self.tile_size - self.tile_padding
-        self.board_canvas.create_oval(x0, y0, x1, y1, fill=color, outline="")
+        self.board_canvas.create_oval(x0, y0, x1, y1, fill=color, outline="", tags=("tile_part"))
 
     def _on_tile_click(self, event: tk.Event):
         col = event.x // self.tile_size
         row = event.y // self.tile_size
-        self._draw_circle(row, col, "red")
+        if 0 <= row < self.n_rows and 0 <= col < self.n_cols:
+            self.tile_states[row][col] = 1 - self.tile_states[row][col]
+            self.redraw_board()
 
 
 if __name__ == "__main__":

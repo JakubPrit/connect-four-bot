@@ -57,8 +57,6 @@ class GUI:
         self._draw_board()
         self.root.bind("<Configure>", self._resize_window)
 
-        self.root.mainloop()
-
     def _resize_window(self, event: tk.Event):
         if event.widget == self.root:
             self.window_width = event.width
@@ -109,10 +107,12 @@ class GUI:
 
     def _on_tile_click(self, event: tk.Event):
         col = event.x // self.tile_size
-        row = event.y // self.tile_size
-        if 0 <= row < self.n_rows and 0 <= col < self.n_cols:
-            self.game.board[row][col] = 1 - self.game.board[row][col]
-            self.redraw_board()
+        if 0 <= col < self.n_cols:
+            turn_result = self.game.place(col)
+            if turn_result == TurnResult.WIN:
+                print(f"Player {self.game.turn} wins!")
+            elif turn_result == TurnResult.INVALID:
+                print("Invalid move!")
 
 
 class Game:
@@ -126,12 +126,15 @@ class Game:
         self.heights = [0 for _ in range(n_cols)]
         self.turn = 1
         self.gui = GUI(self, n_cols, n_rows)
+        self.gui.root.mainloop()
 
     def place(self, col: int) -> TurnResult:
         row = self.n_rows - self.heights[col] - 1
         if row < 0:
             return TurnResult.INVALID
         self.board[row][col] = self.turn
+        self.heights[col] += 1
+        self.gui.redraw_board()
         if self._check_win(row, col):
             return TurnResult.WIN
         self.turn = (self.turn + 1) % self.n_players + 1

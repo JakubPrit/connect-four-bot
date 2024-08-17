@@ -7,7 +7,8 @@ Side = tp.Literal[0, 1, 2, 3]
 class TurnResult(enum.Enum):
     CONTINUE = 0
     WIN = 1
-    INVALID = 2
+    DRAW = 2
+    INVALID = 3
 
 
 TOP = 0
@@ -111,6 +112,8 @@ class GUI:
             turn_result = self.game.place(col)
             if turn_result == TurnResult.WIN:
                 print(f"Player {self.game.turn} wins!")
+            elif turn_result == TurnResult.DRAW:
+                print("It's a draw!")
             elif turn_result == TurnResult.INVALID:
                 print("Invalid move!")
 
@@ -135,10 +138,13 @@ class Game:
         self.board[row][col] = self.turn
         self.heights[col] += 1
         self.gui.redraw_board()
+        self.turn = self.turn % self.n_players + 1
         if self._check_win(row, col):
             return TurnResult.WIN
-        self.turn = (self.turn + 1) % self.n_players + 1
-        return TurnResult.CONTINUE
+        elif all(height == self.n_rows for height in self.heights):
+            return TurnResult.DRAW
+        else:
+            return TurnResult.CONTINUE
 
     def _check_win(self, row: int, col: int) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]

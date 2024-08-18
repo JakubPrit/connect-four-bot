@@ -3,6 +3,7 @@ import typing as tp
 import enum
 from abc import abstractmethod
 from random import randint
+from time import time_ns
 
 
 Side = tp.Literal[0, 1, 2, 3]
@@ -207,14 +208,21 @@ class BaseGame:
 
 
 class Bot:
+    @classmethod
+    def make_move(cls, game: BaseGame) -> None:
+        start_time = time_ns()
+        cls._make_move(game)
+        print("Real time elapsed while computing bot move:", (time_ns() - start_time) / 1e6, "ms")
+
+    @classmethod
     @abstractmethod
-    def make_move(self, game: BaseGame) -> None:
+    def _make_move(cls, game: BaseGame) -> None:
         pass
 
 
 class RandomBot(Bot):
     @classmethod
-    def make_move(cls, game: BaseGame) -> None:
+    def _make_move(cls, game: BaseGame) -> None:
         while not game.place(randint(0, game.n_cols - 1)):
             pass
 
@@ -223,7 +231,7 @@ class BruteForceBot(Bot):
     DEPTH = 7
 
     @classmethod
-    def make_move(cls, game: BaseGame) -> None:
+    def _make_move(cls, game: BaseGame) -> None:
         if game.n_players != 2:
             raise NotImplementedError("Only 2-player games are supported")
 
@@ -241,7 +249,7 @@ class BruteForceBot(Bot):
     @classmethod
     def explore(cls, simulation: 'BotSimulationGame', depth: int) -> tp.Tuple[Num, int]:
         # Negamax algorithm for now
-        # TODO replace with minimax and allow for more than 2 players
+        # TODO somehow allow for more than 2 players
 
         if depth == 0:
             return 0, -1
@@ -273,6 +281,72 @@ class BruteForceBot(Bot):
             simulation.unplace(col)
             simulation.player_turn = current_turn
         return best_score, best_col
+
+
+class AlphaBetaBot(BruteForceBot):
+    DEPTH = 11
+    DEFAULT_ALPHA = -float('inf')
+    DEFAULT_BETA = float('inf')
+
+    @classmethod
+    def explore(cls, simulation: 'BotSimulationGame', depth: int, 
+                alpha: tp.Optional[Num] = None, beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int]:
+        if alpha is None or beta is None:
+            alpha = cls.DEFAULT_ALPHA
+            beta = cls.DEFAULT_BETA
+        assert alpha < beta
+
+        if depth == 0:
+            return 0, -1
+
+        current_turn = simulation.player_turn
+
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
+            if outcome == TurnResult.WIN:
+                # The game is won by this move
+                return simulation.n_cols * simulation.n_rows - simulation.total_moves, col
+            elif outcome == TurnResult.DRAW:
+                # If a move immediately leads to a draw, it has to be the only possible move
+                return 0, col
+
+        best_possible_score = (simulation.n_cols * simulation.n_rows
+                               - simulation.total_moves - simulation.n_players)
+        if best_possible_score < beta:
+            beta = best_possible_score # No need to search for moves with impossibly high scores
+            if alpha >= beta:
+                # The search window is empty
+                return beta, -1
+
+        best_score, best_col = -float('inf'), -1
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            assert outcome == TurnResult.OK
+            score = - cls.explore(simulation, depth - 1, -beta, -alpha)[0]
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
+            if score > best_score:
+                best_score, best_col = score, col
+            alpha = max(alpha, score)
+            if alpha >= beta:
+                # The search window is empty
+                break
+            if score > beta:
+                # Found a move better than the highest score we are looking for
+                return score, col
+        return best_score, best_col
+
+
+class AlphaBetaWeakSolverBot(AlphaBetaBot):
+    DEPTH = 11
+    DEFAULT_ALPHA = -1
+    DEFAULT_BETA = 1
 
 
 class Game(BaseGame):
@@ -339,4 +413,4 @@ class BotSimulationGame(BaseGame):
 if __name__ == "__main__":
     # Game(bots={1:BruteForceBot, 2:BruteForceBot})
     # Game()
-    Game(bots={2:BruteForceBot})
+    Game(bots={2:AlphaBetaBot, 1:AlphaBetaWeakSolverBot})

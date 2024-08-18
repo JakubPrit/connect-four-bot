@@ -130,7 +130,7 @@ class GUI:
 
     def _on_tile_click(self, event: tk.Event):
         col = event.x // self.tile_size
-        if 0 <= col < self.n_cols and self.game.turn not in self.game.bots:
+        if 0 <= col < self.n_cols and self.game.player_turn not in self.game.bots:
             self.game.place(col)
 
     def set_state_label(self, text: str, player: int):
@@ -151,16 +151,18 @@ class BaseGame:
         self.n_players = n_players
         self.board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
         self.heights = [0 for _ in range(n_cols)]
-        self.turn = 0
+        self.player_turn = 0
+        self.total_moves = 0
 
     def place(self, col: int) -> TurnResult:
         row = self.n_rows - self.heights[col] - 1
         if row < 0:
             return TurnResult.INVALID
-        self.board[row][col] = self.turn
+        self.total_moves += 1
+        self.board[row][col] = self.player_turn
         self.heights[col] += 1
-        if self._check_win(row, col, self.turn):
-            return self.game_win(self.turn)
+        if self._check_win(row, col, self.player_turn):
+            return self.game_win(self.player_turn)
         elif self._check_draw():
             return self.game_draw()
         else:
@@ -201,35 +203,38 @@ class BaseGame:
         return False
 
     def _check_draw(self) -> bool:
-        return all(height == self.n_rows for height in self.heights)
+        return self.total_moves == self.n_cols * self.n_rows
 
 
 class Bot:
     @abstractmethod
-    def turn(self, game: BaseGame) -> None:
+    def make_move(self, game: BaseGame) -> None:
         pass
 
 
 class RandomBot(Bot):
     @classmethod
-    def turn(cls, game: BaseGame) -> None:
+    def make_move(cls, game: BaseGame) -> None:
         while not game.place(randint(0, game.n_cols - 1)):
             pass
 
 
 class BruteForceBot(Bot):
-    DEPTH = 120
+    DEPTH = 7
 
     @classmethod
-    def turn(cls, game: BaseGame) -> None:
+    def make_move(cls, game: BaseGame) -> None:
         if game.n_players != 2:
             raise NotImplementedError("Only 2-player games are supported")
+
+        # print(game.player_turn, '----------------------------------') #! debug
 
         test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players)
         test_game.board = [row.copy() for row in game.board]
         test_game.heights = game.heights.copy()
-        test_game.turn = game.turn
+        test_game.player_turn = game.player_turn
         _, col = cls.explore(test_game, cls.DEPTH)
+        assert col != -1
         del test_game
         game.place(col)
 
@@ -238,24 +243,32 @@ class BruteForceBot(Bot):
         # Negamax algorithm for now
         # TODO replace with minimax and allow for more than 2 players
 
-        # print(simulation.turn, depth) #! debug
+        # print(simulation.player_turn, depth) #! debug
 
         if depth == 0:
             return 0, -1
 
         best_score, best_col = -float('inf'), -1
-        for col in range(simulation.n_cols):
-            outcome: TurnResult = simulation.place(col)
-            # print(simulation.turn, col, outcome, depth) #! debug
-            if outcome == TurnResult.OK:
-                score = - cls.explore(simulation, depth - 1)[0]
-                if score > best_score:
-                    best_score, best_col = score, col
-                simulation.unplace(col)
-            elif outcome == TurnResult.WIN:
-                return float('inf'), col
-            elif outcome == TurnResult.DRAW:
-                return 0, col
+        current_turn = simulation.player_turn
+
+        if simulation.total_moves == simulation.n_cols * simulation.n_rows - 1:
+            # This move will win or draw the game
+            
+        
+            # outcome: TurnResult = simulation.place(col)
+            # if outcome == TurnResult.INVALID:
+            #     continue
+            # # print(current_turn, simulation.player_turn, col, outcome, depth) #! debug
+            # if outcome == TurnResult.OK:
+            #     score = - cls.explore(simulation, depth - 1)[0]
+            #     if score > best_score:
+            #         best_score, best_col = score, col
+            # simulation.unplace(col)
+            # simulation.player_turn = current_turn
+            # if outcome == TurnResult.WIN:
+            #     return simulation.n_cols * simulation.n_rows - simulation.total_moves + 1, col
+            # elif outcome == TurnResult.DRAW:
+            #     return 0, col
 
         return best_score, best_col
 
@@ -270,21 +283,21 @@ class Game(BaseGame):
         self.gui.root.mainloop()
 
     def place(self, col: int) -> TurnResult:
-        # print(self.turn, col) #! debug
+        # print(self.player_turn, col) #! debug
         res = super().place(col)
-        # print(self.turn, col, res) #! debug
+        # print(self.player_turn, col, res) #! debug
         self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
 
     def _next_turn(self) -> TurnResult.OK:
-        self.turn = self.turn % self.n_players + 1
+        self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
-        if self.turn in self.bots:
-            self.gui.root.after(100, self.bots[self.turn].turn, self)
+        if self.player_turn in self.bots:
+            self.gui.root.after(100, self.bots[self.player_turn].make_move, self)
         return TurnResult.OK
 
     def _update_turn_label(self):
-        self.gui.set_state_label("Player {}'s turn".format(self.turn), self.turn)
+        self.gui.set_state_label("Player {}'s turn".format(self.player_turn), self.player_turn)
 
     def game_win(self, player: int) -> TurnResult.WIN:
         self.gui.set_state_label("Player {} won!".format(player), player)
@@ -305,7 +318,7 @@ class BotSimulationGame(BaseGame):
         super().__init__(n_cols, n_rows, n_connect, n_players)
 
     def _next_turn(self) -> TurnResult.OK:
-        self.turn = self.turn % self.n_players + 1
+        self.player_turn = self.player_turn % self.n_players + 1
         return TurnResult.OK
 
     def game_win(self, player: int) -> TurnResult.WIN:
@@ -318,7 +331,9 @@ class BotSimulationGame(BaseGame):
         row = self.n_rows - self.heights[col]
         self.board[row][col] = 0
         self.heights[col] -= 1
+        self.total_moves -= 1
 
 
 if __name__ == "__main__":
-    Game(bots={1:BruteForceBot})
+    Game(bots={1:BruteForceBot, 2:BruteForceBot})
+    # Game()

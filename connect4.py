@@ -1,14 +1,19 @@
 import tkinter as tk
 import typing as tp
 import enum
+from abc import abstractmethod
+from random import randint
 
 
 Side = tp.Literal[0, 1, 2, 3]
 class TurnResult(enum.Enum):
-    CONTINUE = 0
+    INVALID = 0
     WIN = 1
     DRAW = 2
-    INVALID = 3
+    OK = 3
+
+    def __bool__(self):
+        return self != TurnResult.INVALID
 
 
 TOP = 0
@@ -112,6 +117,9 @@ class GUI:
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
         self.root.update()
 
+    def update_tile(self, row, col):
+        self._draw_circle(row, col, self.player_color[self.game.board[row][col]])
+
     def _draw_circle(self, row, col, color):
         x0 = col * self.tile_size + self.tile_padding
         y0 = row * self.tile_size + self.tile_padding
@@ -121,7 +129,7 @@ class GUI:
 
     def _on_tile_click(self, event: tk.Event):
         col = event.x // self.tile_size
-        if 0 <= col < self.n_cols and self.game.bots[self.game.turn] is None:
+        if 0 <= col < self.n_cols and self.game.turn not in self.game.bots:
             self.game.place(col)
 
     def set_state_label(self, text: str, player: int):
@@ -131,50 +139,43 @@ class GUI:
         self.board_canvas.tag_unbind("tile_part", "<Button-1>")
 
 
-class Game:
-    def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4,
-                 n_players: int = 2, bots: tp.Optional[tp.Tuple[int, ...]] = None, **gui_kwargs):
-        assert n_cols >= 2 and n_rows >= 2 and n_players >= 2 and n_connect >= 2
-        assert n_connect <= max(n_cols, n_rows)
+class BaseGame:
+    def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4,  n_players: int = 2):
+        assert n_cols >= 2 and n_rows >= 2 and n_players >= 2
+        assert 2 <= n_connect <= max(n_cols, n_rows)
 
         self.n_cols = n_cols
         self.n_rows = n_rows
-        self.n_players = n_players
-        self.bots: tp.List[tp.Optional[Bot]] = [None] * (n_players + 1)
-        if bots:
-            for player in bots:
-                self.bots[player] = Bot(self, player)
         self.n_connect = n_connect
+        self.n_players = n_players
         self.board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
         self.heights = [0 for _ in range(n_cols)]
         self.turn = 0
-        self.gui = GUI(self, n_cols, n_rows, **gui_kwargs)
-        self._next_turn()
-        self.gui.root.mainloop()
 
-    def place(self, col: int) -> bool:
+    def place(self, col: int) -> TurnResult:
         row = self.n_rows - self.heights[col] - 1
         if row < 0:
-            return False
+            return TurnResult.INVALID
         self.board[row][col] = self.turn
         self.heights[col] += 1
-        self.gui.redraw_board()
         if self._check_win(row, col, self.turn):
-            self.game_win(self.turn)
-        elif all(height == self.n_rows for height in self.heights):
-            self.game_draw()
+            return self.game_win(self.turn)
+        elif self._check_draw():
+            return self.game_draw()
         else:
-            self._next_turn()
-        return True
+            return self._next_turn()
 
-    def _next_turn(self):
-        self.turn = self.turn % self.n_players + 1
-        self._update_turn_label()
-        if self.bots[self.turn] is not None:
-            self.gui.root.after(0, self.bots[self.turn].turn) # type: ignore
+    @abstractmethod
+    def _next_turn(self) -> TurnResult.OK:
+        pass
 
-    def _update_turn_label(self):
-        self.gui.set_state_label("Player {}'s turn".format(self.turn), self.turn)
+    @abstractmethod
+    def game_win(self, player: int) -> TurnResult.WIN:
+        pass
+
+    @abstractmethod
+    def game_draw(self) -> TurnResult.DRAW:
+        pass
 
     def _check_win(self, row: int, col: int, player: int) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
@@ -198,27 +199,84 @@ class Game:
                 return True
         return False
 
-    def game_win(self, player: int):
+    def _check_draw(self) -> bool:
+        return all(height == self.n_rows for height in self.heights)
+
+
+class Bot:
+    @abstractmethod
+    def turn(self, game: BaseGame) -> None:
+        pass
+
+
+class RandomBot(Bot):
+    @classmethod
+    def turn(cls, game: BaseGame) -> None:
+        while not game.place(randint(0, game.n_cols - 1)):
+            pass
+
+
+class BruteForceBot(Bot):
+    @classmethod
+    def turn(cls, game: BaseGame) -> None:
+        player = game.turn
+        test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players)
+        test_game.board = [row.copy() for row in game.board]
+        test_game.heights = game.heights.copy()
+        raise NotImplementedError
+
+
+class Game(BaseGame):
+    def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2,
+                 bots: tp.Dict[int, tp.Type[Bot]] = {}, **gui_kwargs):
+        super().__init__(n_cols, n_rows, n_connect, n_players)
+        self.bots = bots
+        self.gui = GUI(self, n_cols, n_rows, **gui_kwargs)
+        self._next_turn()
+        self.gui.root.mainloop()
+
+    def place(self, col: int) -> TurnResult:
+        res = super().place(col)
+        self.gui.update_tile(self.n_rows - self.heights[col], col)
+        return res
+
+    def _next_turn(self) -> TurnResult.OK:
+        self.turn = self.turn % self.n_players + 1
+        self._update_turn_label()
+        if self.turn in self.bots:
+            self.gui.root.after(0, self.bots[self.turn].turn, self)
+        return TurnResult.OK
+
+    def _update_turn_label(self):
+        self.gui.set_state_label("Player {}'s turn".format(self.turn), self.turn)
+
+    def game_win(self, player: int) -> TurnResult.WIN:
         self.gui.set_state_label("Player {} won!".format(player), player)
         self.end_game()
+        return TurnResult.WIN
 
-    def game_draw(self):
+    def game_draw(self) -> TurnResult.DRAW:
         self.gui.set_state_label("It's a draw!", NO_PLAYER)
         self.end_game()
+        return TurnResult.DRAW
 
     def end_game(self):
         self.gui.disable_board()
 
 
-class Bot:
-    def __init__(self, game: Game, player: int):
-        self.game = game
-        self.player = player
+class BotSimulationGame(BaseGame):
+    def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2):
+        super().__init__(n_cols, n_rows, n_connect, n_players)
 
-    def turn(self):
-        for col in range(self.game.n_cols):
-            if self.game.place(col):
-                return
+    def _next_turn(self):
+        self.turn = self.turn % self.n_players + 1
+
+    def game_win(self, player: int) -> TurnResult.WIN:
+        return TurnResult.WIN
+    
+    def game_draw(self) -> TurnResult.DRAW:
+        return TurnResult.DRAW
+
 
 if __name__ == "__main__":
-    Game(bots=(1, 2, 4), n_players=4)
+    Game(bots={1:RandomBot})

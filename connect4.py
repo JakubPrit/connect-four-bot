@@ -243,33 +243,35 @@ class BruteForceBot(Bot):
         # Negamax algorithm for now
         # TODO replace with minimax and allow for more than 2 players
 
-        # print(simulation.player_turn, depth) #! debug
-
         if depth == 0:
             return 0, -1
 
-        best_score, best_col = -float('inf'), -1
         current_turn = simulation.player_turn
 
-        if simulation.total_moves == simulation.n_cols * simulation.n_rows - 1:
-            # This move will win or draw the game
-            
-        
-            # outcome: TurnResult = simulation.place(col)
-            # if outcome == TurnResult.INVALID:
-            #     continue
-            # # print(current_turn, simulation.player_turn, col, outcome, depth) #! debug
-            # if outcome == TurnResult.OK:
-            #     score = - cls.explore(simulation, depth - 1)[0]
-            #     if score > best_score:
-            #         best_score, best_col = score, col
-            # simulation.unplace(col)
-            # simulation.player_turn = current_turn
-            # if outcome == TurnResult.WIN:
-            #     return simulation.n_cols * simulation.n_rows - simulation.total_moves + 1, col
-            # elif outcome == TurnResult.DRAW:
-            #     return 0, col
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
+            if outcome == TurnResult.WIN:
+                # The game is won by this move
+                return simulation.n_cols * simulation.n_rows - simulation.total_moves, col
+            elif outcome == TurnResult.DRAW:
+                # If a move immediately leads to a draw, it has to be the only possible move
+                return 0, col
 
+        best_score, best_col = -float('inf'), -1
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            assert outcome == TurnResult.OK # We have already checked for win and draw
+            score = - cls.explore(simulation, depth - 1)[0]
+            if score > best_score:
+                best_score, best_col = score, col
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
         return best_score, best_col
 
 
@@ -335,5 +337,6 @@ class BotSimulationGame(BaseGame):
 
 
 if __name__ == "__main__":
-    Game(bots={1:BruteForceBot, 2:BruteForceBot})
+    # Game(bots={1:BruteForceBot, 2:BruteForceBot})
     # Game()
+    Game(bots={2:BruteForceBot})

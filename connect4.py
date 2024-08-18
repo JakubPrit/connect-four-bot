@@ -15,6 +15,7 @@ TOP = 0
 BOTTOM = 1
 SIDE = LEFT = 2
 RIGHT = 3
+NO_PLAYER = 0
 
 
 # adapted from https://sashamaps.net/docs/resources/20-colors/
@@ -34,6 +35,7 @@ class GUI:
         self.MIN_WINDOW_WIDTH = 350
         self.MIN_WINDOW_HEIGHT = 350
         self.WINDOW_TITLE = "Connect 4"
+        self.NO_PLAYER_COLOR = "white"
 
         self.game = game
         self.n_cols = n_cols
@@ -49,7 +51,7 @@ class GUI:
         self.tile_bg_color = tile_bg_color
         self.board_outline_color = outline_color
         self.tile_outline_color = outline_color
-        self.state_color = [self.tile_bg_color, *player_colors]
+        self.player_color = [self.NO_PLAYER_COLOR, *player_colors]
 
         self.root = tk.Tk()
         self.root.title(self.WINDOW_TITLE)
@@ -59,6 +61,10 @@ class GUI:
         self.root_frame.pack(fill="both", expand=True)
         self.root_frame.config(bg=self.window_bg_color)
 
+        self.state_label = tk.Label(self.root_frame, text="Initializing...", font="TkDefaultFont 20 bold",
+                                    bg=self.window_bg_color)
+        self.state_label.pack(expand=True)
+
         self._draw_board()
         self.root.bind("<Configure>", self._resize_window)
 
@@ -67,9 +73,9 @@ class GUI:
             self.window_width = event.width
             self.window_height = event.height
             self.root_frame.config(width=self.window_width, height=self.window_height)
-            self.tile_size = min(int(event.width * (1 - 2 * self.BOARD_MARGIN)) // self.n_cols,
-                                 int(event.height * (1 - 2 * self.BOARD_MARGIN
-                                                     - self.BOARD_TOP_EXTRA_MARGIN)) // self.n_rows)
+            self.tile_size = min(int(event.width / (1 + 2 * self.BOARD_MARGIN)) // self.n_cols,
+                                 int(event.height / (1 + 2 * self.BOARD_MARGIN
+                                                     + self.BOARD_TOP_EXTRA_MARGIN)) // self.n_rows)
             self.board_width = self.tile_size * self.n_cols - self.TILE_OUTLINE_WIDTH
             self.board_height = self.tile_size * self.n_rows - self.TILE_OUTLINE_WIDTH
             self.redraw_board()
@@ -93,6 +99,8 @@ class GUI:
         self.board_canvas = tk.Canvas(self.board_frame, width=self.board_width, height=self.board_height)
         self.board_canvas.pack()
 
+        self.state_label.place(anchor="center", relx=0.5, rely=self.BOARD_TOP_EXTRA_MARGIN / 2)
+
         for row in range(self.n_rows):
             for col in range(self.n_cols):
                 self.board_canvas.create_rectangle(col * self.tile_size, row * self.tile_size,
@@ -100,8 +108,9 @@ class GUI:
                                                    fill=self.tile_bg_color, outline=self.tile_outline_color,
                                                    tags=("tile_part"))
                 if self.game.board[row][col] != 0:
-                    self._draw_circle(row, col, self.state_color[self.game.board[row][col]])
+                    self._draw_circle(row, col, self.player_color[self.game.board[row][col]])
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
+        self.root.update()
 
     def _draw_circle(self, row, col, color):
         x0 = col * self.tile_size + self.tile_padding
@@ -112,47 +121,60 @@ class GUI:
 
     def _on_tile_click(self, event: tk.Event):
         col = event.x // self.tile_size
-        if 0 <= col < self.n_cols:
-            turn_result = self.game.place(col)
-            if turn_result == TurnResult.WIN:
-                print(f"Player {self.game.turn} wins!")
-            elif turn_result == TurnResult.DRAW:
-                print("It's a draw!")
-            elif turn_result == TurnResult.INVALID:
-                print("Invalid move!")
+        if 0 <= col < self.n_cols and self.game.bots[self.game.turn] is None:
+            self.game.place(col)
+
+    def set_state_label(self, text: str, player: int):
+        self.state_label.config(text=text, foreground=self.player_color[player])
+
+    def disable_board(self):
+        self.board_canvas.tag_unbind("tile_part", "<Button-1>")
 
 
 class Game:
-    def __init__(self, n_cols: int = 7, n_rows: int = 6,
-                 n_players: int = 20, n_connect: int = 4):
+    def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4,
+                 n_players: int = 2, bots: tp.Optional[tp.Tuple[int, ...]] = None, **gui_kwargs):
         assert n_cols >= 2 and n_rows >= 2 and n_players >= 2 and n_connect >= 2
         assert n_connect <= max(n_cols, n_rows)
 
         self.n_cols = n_cols
         self.n_rows = n_rows
         self.n_players = n_players
+        self.bots: tp.List[tp.Optional[Bot]] = [None] * (n_players + 1)
+        if bots:
+            for player in bots:
+                self.bots[player] = Bot(self, player)
         self.n_connect = n_connect
         self.board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
         self.heights = [0 for _ in range(n_cols)]
-        self.turn = 1
-        self.gui = GUI(self, n_cols, n_rows)
+        self.turn = 0
+        self.gui = GUI(self, n_cols, n_rows, **gui_kwargs)
+        self._next_turn()
         self.gui.root.mainloop()
 
-    def place(self, col: int) -> TurnResult:
+    def place(self, col: int) -> bool:
         row = self.n_rows - self.heights[col] - 1
         if row < 0:
-            return TurnResult.INVALID
+            return False
         self.board[row][col] = self.turn
         self.heights[col] += 1
         self.gui.redraw_board()
-        this_turn = self.turn
-        self.turn = self.turn % self.n_players + 1
-        if self._check_win(row, col, this_turn):
-            return TurnResult.WIN
+        if self._check_win(row, col, self.turn):
+            self.game_win(self.turn)
         elif all(height == self.n_rows for height in self.heights):
-            return TurnResult.DRAW
+            self.game_draw()
         else:
-            return TurnResult.CONTINUE
+            self._next_turn()
+        return True
+
+    def _next_turn(self):
+        self.turn = self.turn % self.n_players + 1
+        self._update_turn_label()
+        if self.bots[self.turn] is not None:
+            self.gui.root.after(0, self.bots[self.turn].turn) # type: ignore
+
+    def _update_turn_label(self):
+        self.gui.set_state_label("Player {}'s turn".format(self.turn), self.turn)
 
     def _check_win(self, row: int, col: int, player: int) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
@@ -176,6 +198,27 @@ class Game:
                 return True
         return False
 
+    def game_win(self, player: int):
+        self.gui.set_state_label("Player {} won!".format(player), player)
+        self.end_game()
+
+    def game_draw(self):
+        self.gui.set_state_label("It's a draw!", NO_PLAYER)
+        self.end_game()
+
+    def end_game(self):
+        self.gui.disable_board()
+
+
+class Bot:
+    def __init__(self, game: Game, player: int):
+        self.game = game
+        self.player = player
+
+    def turn(self):
+        for col in range(self.game.n_cols):
+            if self.game.place(col):
+                return
 
 if __name__ == "__main__":
-    Game()
+    Game(bots=(1, 2, 4), n_players=4)

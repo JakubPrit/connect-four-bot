@@ -6,6 +6,7 @@ from random import randint
 
 
 Side = tp.Literal[0, 1, 2, 3]
+Num = tp.Union[int, float]
 class TurnResult(enum.Enum):
     INVALID = 0
     WIN = 1
@@ -217,13 +218,46 @@ class RandomBot(Bot):
 
 
 class BruteForceBot(Bot):
+    DEPTH = 120
+
     @classmethod
     def turn(cls, game: BaseGame) -> None:
-        player = game.turn
+        if game.n_players != 2:
+            raise NotImplementedError("Only 2-player games are supported")
+
         test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players)
         test_game.board = [row.copy() for row in game.board]
         test_game.heights = game.heights.copy()
-        raise NotImplementedError
+        test_game.turn = game.turn
+        _, col = cls.explore(test_game, cls.DEPTH)
+        del test_game
+        game.place(col)
+
+    @classmethod
+    def explore(cls, simulation: 'BotSimulationGame', depth: int) -> tp.Tuple[Num, int]:
+        # Negamax algorithm for now
+        # TODO replace with minimax and allow for more than 2 players
+
+        # print(simulation.turn, depth) #! debug
+
+        if depth == 0:
+            return 0, -1
+
+        best_score, best_col = -float('inf'), -1
+        for col in range(simulation.n_cols):
+            outcome: TurnResult = simulation.place(col)
+            # print(simulation.turn, col, outcome, depth) #! debug
+            if outcome == TurnResult.OK:
+                score = - cls.explore(simulation, depth - 1)[0]
+                if score > best_score:
+                    best_score, best_col = score, col
+                simulation.unplace(col)
+            elif outcome == TurnResult.WIN:
+                return float('inf'), col
+            elif outcome == TurnResult.DRAW:
+                return 0, col
+
+        return best_score, best_col
 
 
 class Game(BaseGame):
@@ -236,7 +270,9 @@ class Game(BaseGame):
         self.gui.root.mainloop()
 
     def place(self, col: int) -> TurnResult:
+        # print(self.turn, col) #! debug
         res = super().place(col)
+        # print(self.turn, col, res) #! debug
         self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
 
@@ -244,7 +280,7 @@ class Game(BaseGame):
         self.turn = self.turn % self.n_players + 1
         self._update_turn_label()
         if self.turn in self.bots:
-            self.gui.root.after(0, self.bots[self.turn].turn, self)
+            self.gui.root.after(100, self.bots[self.turn].turn, self)
         return TurnResult.OK
 
     def _update_turn_label(self):
@@ -268,15 +304,21 @@ class BotSimulationGame(BaseGame):
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2):
         super().__init__(n_cols, n_rows, n_connect, n_players)
 
-    def _next_turn(self):
+    def _next_turn(self) -> TurnResult.OK:
         self.turn = self.turn % self.n_players + 1
+        return TurnResult.OK
 
     def game_win(self, player: int) -> TurnResult.WIN:
         return TurnResult.WIN
     
     def game_draw(self) -> TurnResult.DRAW:
         return TurnResult.DRAW
+    
+    def unplace(self, col: int) -> None:
+        row = self.n_rows - self.heights[col]
+        self.board[row][col] = 0
+        self.heights[col] -= 1
 
 
 if __name__ == "__main__":
-    Game(bots={1:RandomBot})
+    Game(bots={1:BruteForceBot})

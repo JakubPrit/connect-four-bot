@@ -204,6 +204,8 @@ class BaseGame:
         return False
 
     def _check_draw(self) -> bool:
+        if all(height == self.n_rows for height in self.heights) != (self.total_moves == self.n_cols * self.n_rows):
+            print(self.heights, self.total_moves) #! debug
         return self.total_moves == self.n_cols * self.n_rows
 
 
@@ -241,6 +243,7 @@ class BruteForceBot(Bot):
         test_game.board = [row.copy() for row in game.board]
         test_game.heights = game.heights.copy()
         test_game.player_turn = game.player_turn
+        test_game.total_moves = game.total_moves
         _, col = cls.explore(test_game, cls.DEPTH)
         assert col != -1
         del test_game
@@ -374,6 +377,7 @@ class AlphaBetaOptimisedBot(BruteForceBot):
                 return simulation.n_cols * simulation.n_rows - simulation.total_moves, col
             elif outcome == TurnResult.DRAW:
                 # If a move immediately leads to a draw, it has to be the only possible move
+                print('draw') #! debug
                 return 0, col
 
         best_possible_score = (simulation.n_cols * simulation.n_rows
@@ -382,6 +386,7 @@ class AlphaBetaOptimisedBot(BruteForceBot):
             beta = best_possible_score # No need to search for moves with impossibly high scores
             if alpha >= beta:
                 # The search window is empty
+                print('empty window', alpha, beta) #! debug
                 return beta, -1
 
         best_score, best_col = -float('inf'), -1
@@ -406,6 +411,7 @@ class AlphaBetaOptimisedBot(BruteForceBot):
                     # The search window is empty
                     assert False # Should never happen
                     break
+        print(depth, current_turn, alpha, beta, best_score, best_col) #! debug
         return best_score, best_col
 
 
@@ -435,7 +441,7 @@ class Game(BaseGame):
         self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
         if self.player_turn in self.bots:
-            self.gui.root.after(500, self.bots[self.player_turn].make_move, self)
+            self.gui.root.after(1, self.bots[self.player_turn].make_move, self)
         return TurnResult.OK
 
     def _update_turn_label(self):
@@ -482,11 +488,12 @@ if __name__ == "__main__":
     board = [
         [0, 1, 2, 2, 1, 1, 0],
         [0, 2, 1, 1, 2, 2, 0],
-        [0, 1, 2, 2, 1, 1, 0],
+        [0, 1, 2, 2, 1, 1, 1],
         [0, 2, 1, 1, 2, 2, 2],
         [0, 1, 2, 2, 1, 1, 2],
         [1, 2, 2, 1, 1, 1, 2]
     ]
-    heights = [1, 6, 6, 6, 6, 6, 3]
-    turn = 1
-    Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot}, game_state=(board, heights, turn))
+    heights = [1, 6, 6, 6, 6, 6, 4]
+    turn = 2
+    # Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot}, game_state=(board, heights, turn))
+    Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot})

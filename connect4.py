@@ -13,6 +13,9 @@ from time import time_ns
 
 Side = tp.Literal[0, 1, 2, 3]
 Num = tp.Union[int, float]
+GameState = tp.Tuple[tp.List[tp.List[int]], tp.List[int], int]
+
+
 class TurnResult(enum.Enum):
     INVALID = 0
     WIN = 1
@@ -32,9 +35,23 @@ NO_PLAYER = 0
 
 
 class GUI:
-    def __init__(self, game: 'Game', n_cols: int, n_rows: int, tile_size: int = 100,
-                 tile_bg_color: str = "#909090", outline_color: str = "white",
-                 window_bg_color: str = "#909090", player_colors: tp.Optional[tp.List[str]] = None):
+    def __init__(self, game: 'Game', tile_size: int = 100, tile_bg_color: str = "#909090",
+                 outline_color: str = "white", window_bg_color: str = "#909090",
+                 player_colors: tp.Optional[tp.List[str]] = None):
+        """ Initialize the GUI for the game.
+
+        Args:
+            game (Game): The game instance to connect the GUI to.
+            tile_size (int, optional): The size of each tile in pixels. Defaults to 100.
+            tile_bg_color (str, optional): The background color of the tiles.
+                    Defaults to "#909090".
+            outline_color (str, optional): The color of all outlines. Defaults to "white".
+            window_bg_color (str, optional): The background color of the game window.
+                    Defaults to "#909090".
+            player_colors (tp.Optional[tp.List[str]], optional): A list of colors to use
+                    for each player. Defaults to None for default colors.
+        """
+
         self.MIN_TILE_SIZE = 50
         self.BOARD_TOP_EXTRA_MARGIN = 0.1
         self.BOARD_MARGIN = 0.05
@@ -46,14 +63,15 @@ class GUI:
         self.MIN_WINDOW_HEIGHT = 350
         self.WINDOW_TITLE = "Connect 4"
         self.NO_PLAYER_COLOR = "white"
-        self.DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green', 'cyan', 'maroon', 'pink', 'black']
+        self.DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green',
+                                      'cyan', 'maroon', 'pink', 'darkgreen', 'black']
 
         self.game = game
-        self.n_cols = n_cols
-        self.n_rows = n_rows
+        self.n_cols = game.n_cols
+        self.n_rows = game.n_rows
         self.tile_size = tile_size
-        self.board_width = self.tile_size * n_cols - self.TILE_OUTLINE_WIDTH
-        self.board_height = self.tile_size * n_rows - self.TILE_OUTLINE_WIDTH
+        self.board_width = self.tile_size * game.n_cols - self.TILE_OUTLINE_WIDTH
+        self.board_height = self.tile_size * game.n_rows - self.TILE_OUTLINE_WIDTH
         self.window_width = int(self.board_width * (1 + 2 * self.BOARD_MARGIN))
         self.window_height = int(self.board_height * (1 + 2 * self.BOARD_MARGIN
                                                       + self.BOARD_TOP_EXTRA_MARGIN))
@@ -75,8 +93,10 @@ class GUI:
         self.root_frame.pack(fill="both", expand=True)
         self.root_frame.config(bg=self.window_bg_color)
 
-        self.state_label = tk.Label(self.root_frame, text="Initializing...", font="TkDefaultFont 20 bold",
-                                    bg=self.window_bg_color)
+        self.board_frame: tk.Frame
+        self.board_canvas: tk.Canvas
+        self.state_label = tk.Label(self.root_frame, text="Initializing...",
+                                    font="TkDefaultFont 20 bold", bg=self.window_bg_color)
         self.state_label.pack(expand=True)
 
         self._draw_board()
@@ -87,14 +107,20 @@ class GUI:
             self.window_width = event.width
             self.window_height = event.height
             self.root_frame.config(width=self.window_width, height=self.window_height)
-            self.tile_size = min(int(event.width / (1 + 2 * self.BOARD_MARGIN)) // self.n_cols,
-                                 int(event.height / (1 + 2 * self.BOARD_MARGIN
-                                                     + self.BOARD_TOP_EXTRA_MARGIN)) // self.n_rows)
+            horizontal_margin = 2 * self.BOARD_MARGIN
+            vertical_margin = 2 * self.BOARD_MARGIN + self.BOARD_TOP_EXTRA_MARGIN
+            self.tile_size = min(int(event.width / horizontal_margin) // self.n_cols,
+                                 int(event.height / vertical_margin) // self.n_rows)
             self.board_width = self.tile_size * self.n_cols - self.TILE_OUTLINE_WIDTH
             self.board_height = self.tile_size * self.n_rows - self.TILE_OUTLINE_WIDTH
             self.redraw_board()
 
-    def redraw_board(self):
+    def redraw_board(self) -> None:
+        """ Redraw the whole board.
+            Note: _draw_board() has to be called at least once before this,
+            it is done in __init__.
+        """
+
         self.board_canvas.delete("all")
         self.board_frame.destroy()
         self._draw_board()
@@ -126,7 +152,14 @@ class GUI:
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
         self.root.update()
 
-    def update_tile(self, row, col):
+    def update_tile(self, row: int, col: int) -> None:
+        """ Update the tile at the given row and column according to the game state.
+
+        Args:
+            row (int): The row of the tile to update.
+            col (int): The column of the tile to update.
+        """
+
         self._draw_circle(row, col, self.player_color[self.game.board[row][col]])
 
     def _draw_circle(self, row, col, color):
@@ -142,9 +175,18 @@ class GUI:
             self.game.place(col)
 
     def set_state_label(self, text: str, player: int):
+        """ Set the text of the state label and color it according to the player.
+
+        Args:
+            text (str): The text to set.
+            player (int): The id of the player to color the text with.
+        """
+
         self.state_label.config(text=text, foreground=self.player_color[player])
 
     def disable_board(self):
+        """ Disable placing new tiles on the board by unbinding the tile click event. """
+
         self.board_canvas.tag_unbind("tile_part", "<Button-1>")
 
 
@@ -168,6 +210,15 @@ class BaseGame:
         self.total_moves = 0
 
     def place(self, col: int) -> TurnResult:
+        """ Place a tile in the given column and update the game and gui states.
+
+        Args:
+            col (int): The column to place the tile in.
+
+        Returns:
+            TurnResult: The result of the turn (win, draw, ok, invalid).
+        """
+
         row = self.n_rows - self.heights[col] - 1
         if row < 0:
             return TurnResult.INVALID
@@ -194,6 +245,17 @@ class BaseGame:
         pass
 
     def _check_win(self, row: int, col: int, player: int) -> bool:
+        """ Check if the given player has won the game by placing a tile in the given position.
+
+        Args:
+            row (int): The row of the placed tile.
+            col (int): The column of the placed tile.
+            player (int): The id of the player that placed the tile.
+
+        Returns:
+            bool: True if the player has won, False otherwise.
+        """
+
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
             count = 1
@@ -216,16 +278,42 @@ class BaseGame:
         return False
 
     def _check_draw(self) -> bool:
+        """ Check if the game has ended in a draw. """
+
         return self.total_moves == self.n_cols * self.n_rows
 
 
 class Game(BaseGame):
+    """ The main class for the Connect 4 game. """
+
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2,
-                 bots: tp.Dict[int, tp.Type['Bot']] = {},
-                 game_state: tp.Optional[tp.Tuple[tp.List[tp.List[int]], tp.List[int], int]] = None, **gui_kwargs):
+                 bots: tp.Dict[int, tp.Type['Bot']] = {}, game_state: tp.Optional[GameState] = None,
+                 **gui_kwargs):
+        """ Initialize the game and start the GUI.
+
+        Args:
+            n_cols (int, optional): The number of columns in the game board. Defaults to 7.
+            n_rows (int, optional): The number of rows in the game board. Defaults to 6.
+            n_connect (int, optional): The number of tiles a player needs to connect to win.
+                    Defaults to 4.
+            n_players (int, optional): The number of players in the game. Defaults to 2.
+            bots (tp.Dict[int, tp.Type[Bot]], optional): A dictionary mapping player ids to
+                    bot classes. Defaults to {} for no bots.
+            game_state (tp.Optional[GameState], optional):
+                    The state of the game to start from. Defaults to None for a new game.
+                    The tuple should contain the board, heights, and the player turn.
+                    The board should be a list of rows (from top to bottom), each row being
+                    a list of integers (from left to right) representing the player id
+                    of the tile in that position (0 for empty). The heights should be a list
+                    of integers representing the height of each column (from left to right).
+                    The player turn should be the id of the player whose turn it is.
+            **gui_kwargs: Additional keyword arguments to pass to the GUI constructor.
+                    See GUI class.
+        """
+
         super().__init__(n_cols, n_rows, n_connect, n_players)
         self.bots = bots
-        self.gui = GUI(self, n_cols, n_rows, **gui_kwargs)
+        self.gui = GUI(self, **gui_kwargs)
         if game_state is not None:
             self.board, self.heights, self.player_turn = game_state
             self.total_moves = sum(height for height in self.heights)
@@ -235,35 +323,71 @@ class Game(BaseGame):
         self.gui.root.mainloop()
 
     def place(self, col: int) -> TurnResult:
+        """ Place a tile in the given column and update the game state.
+
+        Args:
+            col (int): The column to place the tile in.
+
+        Returns:
+            TurnResult: The result of the turn (win, draw, ok, invalid).
+        """
+
         res = super().place(col)
         self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
 
     def _next_turn(self) -> TurnResult.OK:
+        """ Internal method to handle updating the turn to the next player.
+            Is only called after a valid non-game-ending move.
+
+        Returns:
+            TurnResult.OK: The result of the turn (the turn was successful, no win or draw).
+        """
+
         self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
         if self.player_turn in self.bots:
             self.gui.root.after(10, self.bots[self.player_turn].make_move, self)
         return TurnResult.OK
 
-    def _update_turn_label(self):
+    def _update_turn_label(self) -> None:
         self.gui.set_state_label("Player {}'s turn".format(self.player_turn), self.player_turn)
 
     def game_win(self, player: int) -> TurnResult.WIN:
+        """ Handle the game being won by a player.
+
+        Args:
+            player (int): The id of the player that won.
+
+        Returns:
+            TurnResult.WIN: The result of the game.
+        """
+
         self.gui.set_state_label("Player {} won!".format(player), player)
         self.end_game()
         return TurnResult.WIN
 
     def game_draw(self) -> TurnResult.DRAW:
+        """ Handle the game ending in a draw.
+
+        Returns:
+            TurnResult.DRAW: The result of the game.
+        """
+
         self.gui.set_state_label("It's a draw!", NO_PLAYER)
         self.end_game()
         return TurnResult.DRAW
 
-    def end_game(self):
+    def end_game(self) -> None:
+        """ End the game by disabling the board. """
+
         self.gui.disable_board()
 
 
 class BotSimulationGame(BaseGame):
+    """ A modified version of the game that allows for simulating
+        moves without affecting the actual game state. """
+
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2):
         super().__init__(n_cols, n_rows, n_connect, n_players)
 
@@ -289,8 +413,18 @@ class BotSimulationGame(BaseGame):
 #############################################################
 
 class Bot:
+    """ Base class for all bots. """
+
     @classmethod
     def make_move(cls, game: BaseGame) -> None:
+        """ Make a bot move in the game. Prints the time taken to compute the move
+            in milliseconds to stdout. The actual move is computed and made in the
+            _make_move method that has to be implemented by the bot subclass.
+
+        Args:
+            game (BaseGame): The game instance to make a move in.
+        """
+
         start_time = time_ns()
         cls._make_move(game)
         print("Real time elapsed while computing bot move:", (time_ns() - start_time) / 1e6, "ms")
@@ -302,6 +436,8 @@ class Bot:
 
 
 class RandomBot(Bot):
+    """ A bot that makes random valid moves. """
+
     @classmethod
     def _make_move(cls, game: BaseGame) -> None:
         while not game.place(randint(0, game.n_cols - 1)):
@@ -309,6 +445,8 @@ class RandomBot(Bot):
 
 
 class AlphaBetaNegamaxBot(Bot):
+    """ A bot that uses the Alpha-Beta Pruning Negamax algorithm to make moves. """
+
     DEPTH = 11
     DEFAULT_ALPHA = -float('inf')
     DEFAULT_BETA = float('inf')
@@ -323,14 +461,29 @@ class AlphaBetaNegamaxBot(Bot):
         test_game.heights = game.heights.copy()
         test_game.player_turn = game.player_turn
         test_game.total_moves = game.total_moves
-        _, col = cls.explore(test_game, cls.DEPTH)
+        _, col = cls._explore(test_game, cls.DEPTH)
         assert col != -1
         del test_game
         game.place(col)
 
     @classmethod
-    def explore(cls, simulation: 'BotSimulationGame', depth: int,
-                alpha: tp.Optional[Num] = None, beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int]:
+    def _explore(cls, simulation: 'BotSimulationGame', depth: int,
+                alpha: tp.Optional[Num] = None,
+                beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int]:
+        """ Recursively explore the game tree using the Alpha-Beta Pruning Negamax algorithm.
+
+        Args:
+            simulation (BotSimulationGame): An instance of the game to explore.
+            depth (int): The depth of the search tree to explore.
+            alpha (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
+                    Defaults to None for the default value of DEFAULT_ALPHA.
+            beta (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
+                    Defaults to None for the default value of DEFAULT_BETA.
+
+        Returns:
+            tp.Tuple[Num, int]: The score of the best move found and the column of the move.
+        """
+
         if alpha is None or beta is None:
             alpha = cls.DEFAULT_ALPHA
             beta = cls.DEFAULT_BETA
@@ -359,7 +512,7 @@ class AlphaBetaNegamaxBot(Bot):
         if best_possible_score < beta:
             beta = best_possible_score # No need to search for moves with impossibly high scores
             if alpha >= beta:
-                # The search window is empty
+                # The search window is empty, prune the search
                 return beta, -1
 
         best_score, best_col = -float('inf'), -1
@@ -371,7 +524,7 @@ class AlphaBetaNegamaxBot(Bot):
                 if outcome == TurnResult.INVALID:
                     continue
                 assert outcome == TurnResult.OK
-                score = - cls.explore(simulation, depth - 1, -beta, -alpha)[0]
+                score = - cls._explore(simulation, depth - 1, -beta, -alpha)[0]
                 simulation.unplace(col)
                 simulation.player_turn = current_turn
                 if score > best_score:
@@ -384,6 +537,113 @@ class AlphaBetaNegamaxBot(Bot):
                     # The search window is empty
                     assert False # Should never happen, we should have returned already
         return best_score, best_col
+
+
+class NPlayerAlphaBetaNegamaxBot(Bot):
+    """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
+        This bot is able to play in games with more than 2 players. """
+
+    DEPTH = 11
+    DEFAULT_ALPHA = -float('inf')
+    DEFAULT_BETA = float('inf')
+
+    @classmethod
+    def _make_move(cls, game: BaseGame) -> None:
+        test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players)
+        test_game.board = [row.copy() for row in game.board]
+        test_game.heights = game.heights.copy()
+        test_game.player_turn = game.player_turn
+        test_game.total_moves = game.total_moves
+        _, _, col = cls.explore(test_game, cls.DEPTH)
+        assert col != -1
+        del test_game
+        game.place(col)
+
+    @classmethod
+    def explore(cls, simulation: 'BotSimulationGame', depth: int,
+                alpha: tp.Optional[Num] = None,
+                beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int, int]:
+        """ Recursively explore the game tree using the Alpha-Beta Pruning
+            modified Minimax algorithm.
+
+        Args:
+            simulation (BotSimulationGame): An instance of the game to explore.
+            depth (int): The depth of the search tree to explore.
+            alpha (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
+                    Defaults to None for the default value of DEFAULT_ALPHA.
+            beta (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
+                    Defaults to None for the default value of DEFAULT_BETA.
+
+        Returns:
+            tp.Tuple[Num, int, int]: The absolute value of the score of the best move found, 
+                    the player id that is expected to win (has the returned score) or 0 if a draw
+                    is expected or the search was cut off, and the column of the move.
+        """
+
+        if alpha is None or beta is None:
+            alpha = cls.DEFAULT_ALPHA
+            beta = cls.DEFAULT_BETA
+        assert alpha < beta
+
+        if depth == 0:
+            return 0, 0, -1
+
+        current_turn = simulation.player_turn
+
+        score_if_win = simulation.n_cols * simulation.n_rows - simulation.total_moves
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
+            if outcome == TurnResult.WIN:
+                # The game is won by this move
+                return score_if_win, current_turn, col
+            elif outcome == TurnResult.DRAW:
+                # If a move immediately leads to a draw, it has to be the only possible move
+                return 0, 0, col
+
+        best_possible_score = score_if_win - simulation.n_players
+        if best_possible_score < beta:
+            beta = best_possible_score # No need to search for moves with impossibly high scores
+            if alpha >= beta:
+                # The search window is empty, prune the search
+                return beta, 0, -1
+
+        best_score, best_player, best_col = -float('inf'), 0, -1
+        for offset in range((simulation.n_cols + 1) // 2):
+            left = (simulation.n_cols - 1) // 2 - offset
+            right = (simulation.n_cols + 1) // 2 + offset
+            for col in ([left, right] if right < simulation.n_cols else [left]):
+                outcome = simulation.place(col)
+                if outcome == TurnResult.INVALID:
+                    continue
+                assert outcome == TurnResult.OK
+                score, player, _ = cls.explore(simulation, depth - 1, -beta, -alpha)
+                if player != current_turn:
+                    score = -score
+                simulation.unplace(col)
+                simulation.player_turn = current_turn
+                if score > best_score:
+                    best_score, bets_player, best_col = score, player, col
+                alpha = max(alpha, score)
+                if score >= beta:
+                    # Found a move better than the highest score we are looking for
+                    return abs(score), player, col
+                if alpha >= beta:
+                    # The search window is empty
+                    assert False # Should never happen, we should have returned already
+        return abs(best_score), best_player, best_col
+
+
+class DeeperAlphaBetaNegamaxBot(AlphaBetaNegamaxBot):
+    DEPTH = 13
+
+
+#############################################################
+#                          TESTING                          #
+#############################################################
 
 
 if __name__ == "__main__":
@@ -400,4 +660,5 @@ if __name__ == "__main__":
     heights = [1, 6, 6, 6, 6, 6, 4]
     turn = 2
     # Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot}, game_state=(board, heights, turn))
-    Game(bots={1:AlphaBetaNegamaxBot, 2:AlphaBetaNegamaxBot})
+    Game(bots={2:DeeperAlphaBetaNegamaxBot}, n_connect=4)
+    # Game(n_players=3, n_connect=3)

@@ -109,8 +109,8 @@ class GUI:
             self.root_frame.config(width=self.window_width, height=self.window_height)
             horizontal_margin = 2 * self.BOARD_MARGIN
             vertical_margin = 2 * self.BOARD_MARGIN + self.BOARD_TOP_EXTRA_MARGIN
-            self.tile_size = min(int(event.width / horizontal_margin) // self.n_cols,
-                                 int(event.height / vertical_margin) // self.n_rows)
+            self.tile_size = min(int(event.width / (1 + horizontal_margin)) // self.n_cols,
+                                 int(event.height / (1 + vertical_margin)) // self.n_rows)
             self.board_width = self.tile_size * self.n_cols - self.TILE_OUTLINE_WIDTH
             self.board_height = self.tile_size * self.n_rows - self.TILE_OUTLINE_WIDTH
             self.redraw_board()
@@ -626,7 +626,7 @@ class NPlayerAlphaBetaBot(Bot):
                 simulation.unplace(col)
                 simulation.player_turn = current_turn
                 if score > best_score:
-                    best_score, bets_player, best_col = score, player, col
+                    best_score, best_player, best_col = score, player, col
                 alpha = max(alpha, score)
                 if score >= beta:
                     # Found a move better than the highest score we are looking for
@@ -638,6 +638,9 @@ class NPlayerAlphaBetaBot(Bot):
 
 
 class DeeperAlphaBetaNegamaxBot(AlphaBetaNegamaxBot):
+    DEPTH = 13
+
+class DeeperNPlayerAlphaBetaBot(NPlayerAlphaBetaBot):
     DEPTH = 13
 
 
@@ -671,6 +674,7 @@ if __name__ == "__main__":
     heights = [0, 0, 0, 6, 1, 0, 0]
     turn = 2
     # Game(bots={1:AlphaBetaNegamaxBot, 2:NPlayerAlphaBetaBot}, game_state=(board, heights, turn)) #ok
-    Game(bots={1:AlphaBetaNegamaxBot, 2:AlphaBetaNegamaxBot}, game_state=(board, heights, turn)) #bad, idk why
-    # Game(bots={1:AlphaBetaNegamaxBot, 2:NPlayerAlphaBetaBot}, n_connect=4)
+    # Game(bots={1:AlphaBetaNegamaxBot, 2:AlphaBetaNegamaxBot}, game_state=(board, heights, turn)) #bad, idk why
+    # Game(bots={1:AlphaBetaNegamaxBot, 2:DeeperNPlayerAlphaBetaBot}, n_connect=4)
+    Game(bots={1:DeeperNPlayerAlphaBetaBot, 2:NPlayerAlphaBetaBot, 3:NPlayerAlphaBetaBot}, n_connect=3, n_players=3)
     # Game(n_players=3, n_connect=3)

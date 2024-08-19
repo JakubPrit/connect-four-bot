@@ -539,7 +539,7 @@ class AlphaBetaNegamaxBot(Bot):
         return best_score, best_col
 
 
-class NPlayerAlphaBetaNegamaxBot(Bot):
+class NPlayerAlphaBetaBot(Bot):
     """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
         This bot is able to play in games with more than 2 players. """
 
@@ -659,6 +659,18 @@ if __name__ == "__main__":
     ]
     heights = [1, 6, 6, 6, 6, 6, 4]
     turn = 2
-    # Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot}, game_state=(board, heights, turn))
-    Game(bots={2:DeeperAlphaBetaNegamaxBot}, n_connect=4)
+
+    board = [
+        [0, 0, 0, 2, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 2, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 2, 0, 0, 0],
+        [0, 0, 0, 1, 1, 0, 0]
+    ]
+    heights = [0, 0, 0, 6, 1, 0, 0]
+    turn = 2
+    # Game(bots={1:AlphaBetaNegamaxBot, 2:NPlayerAlphaBetaBot}, game_state=(board, heights, turn)) #ok
+    Game(bots={1:AlphaBetaNegamaxBot, 2:AlphaBetaNegamaxBot}, game_state=(board, heights, turn)) #bad, idk why
+    # Game(bots={1:AlphaBetaNegamaxBot, 2:NPlayerAlphaBetaBot}, n_connect=4)
     # Game(n_players=3, n_connect=3)

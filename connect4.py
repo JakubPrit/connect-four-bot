@@ -289,7 +289,7 @@ class AlphaBetaBot(BruteForceBot):
     DEFAULT_BETA = float('inf')
 
     @classmethod
-    def explore(cls, simulation: 'BotSimulationGame', depth: int, 
+    def explore(cls, simulation: 'BotSimulationGame', depth: int,
                 alpha: tp.Optional[Num] = None, beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int]:
         if alpha is None or beta is None:
             alpha = cls.DEFAULT_ALPHA
@@ -334,27 +334,93 @@ class AlphaBetaBot(BruteForceBot):
             if score > best_score:
                 best_score, best_col = score, col
             alpha = max(alpha, score)
-            if alpha >= beta:
-                # The search window is empty
-                break
-            if score > beta:
+            if score >= beta:
                 # Found a move better than the highest score we are looking for
                 return score, col
+            if alpha >= beta:
+                # The search window is empty
+                assert False # Should never happen
+                break
         return best_score, best_col
 
 
-class AlphaBetaWeakSolverBot(AlphaBetaBot):
+class AlphaBetaOptimisedBot(BruteForceBot):
     DEPTH = 11
-    DEFAULT_ALPHA = -1
-    DEFAULT_BETA = 1
+    DEFAULT_ALPHA = -float('inf')
+    DEFAULT_BETA = float('inf')
+
+    @classmethod
+    def explore(cls, simulation: 'BotSimulationGame', depth: int,
+                alpha: tp.Optional[Num] = None, beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int]:
+        if alpha is None or beta is None:
+            alpha = cls.DEFAULT_ALPHA
+            beta = cls.DEFAULT_BETA
+        assert alpha < beta
+
+        if depth == 0:
+            return 0, -1
+
+        current_turn = simulation.player_turn
+
+        for col in range(simulation.n_cols):
+            outcome = simulation.place(col)
+            if outcome == TurnResult.INVALID:
+                continue
+            simulation.unplace(col)
+            simulation.player_turn = current_turn
+            if outcome == TurnResult.WIN:
+                print('win', col, simulation.player_turn) #! debug
+                # The game is won by this move
+                return simulation.n_cols * simulation.n_rows - simulation.total_moves, col
+            elif outcome == TurnResult.DRAW:
+                # If a move immediately leads to a draw, it has to be the only possible move
+                return 0, col
+
+        best_possible_score = (simulation.n_cols * simulation.n_rows
+                               - simulation.total_moves - simulation.n_players)
+        if best_possible_score < beta:
+            beta = best_possible_score # No need to search for moves with impossibly high scores
+            if alpha >= beta:
+                # The search window is empty
+                return beta, -1
+
+        best_score, best_col = -float('inf'), -1
+        for offset in range((simulation.n_cols + 1) // 2):
+            left = (simulation.n_cols - 1) // 2 - offset
+            right = (simulation.n_cols + 1) // 2 + offset
+            for col in ([left, right] if right < simulation.n_cols else [left]):
+                outcome = simulation.place(col)
+                if outcome == TurnResult.INVALID:
+                    continue
+                assert outcome == TurnResult.OK
+                score = - cls.explore(simulation, depth - 1, -beta, -alpha)[0]
+                simulation.unplace(col)
+                simulation.player_turn = current_turn
+                if score > best_score:
+                    best_score, best_col = score, col
+                alpha = max(alpha, score)
+                if score >= beta:
+                    # Found a move better than the highest score we are looking for
+                    return score, col
+                if alpha >= beta:
+                    # The search window is empty
+                    assert False # Should never happen
+                    break
+        return best_score, best_col
 
 
 class Game(BaseGame):
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2,
-                 bots: tp.Dict[int, tp.Type[Bot]] = {}, **gui_kwargs):
+                 bots: tp.Dict[int, tp.Type[Bot]] = {},
+                 game_state: tp.Optional[tp.Tuple[tp.List[tp.List[int]], tp.List[int], int]] = None, **gui_kwargs):
         super().__init__(n_cols, n_rows, n_connect, n_players)
         self.bots = bots
         self.gui = GUI(self, n_cols, n_rows, **gui_kwargs)
+        if game_state is not None:
+            self.board, self.heights, self.player_turn = game_state
+            self.total_moves = sum(height for height in self.heights)
+            self.player_turn -= 1
+            self.gui.redraw_board()
         self._next_turn()
         self.gui.root.mainloop()
 
@@ -369,7 +435,7 @@ class Game(BaseGame):
         self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
         if self.player_turn in self.bots:
-            self.gui.root.after(100, self.bots[self.player_turn].make_move, self)
+            self.gui.root.after(500, self.bots[self.player_turn].make_move, self)
         return TurnResult.OK
 
     def _update_turn_label(self):
@@ -413,4 +479,14 @@ class BotSimulationGame(BaseGame):
 if __name__ == "__main__":
     # Game(bots={1:BruteForceBot, 2:BruteForceBot})
     # Game()
-    Game(bots={2:AlphaBetaBot, 1:AlphaBetaWeakSolverBot})
+    board = [
+        [0, 1, 2, 2, 1, 1, 0],
+        [0, 2, 1, 1, 2, 2, 0],
+        [0, 1, 2, 2, 1, 1, 0],
+        [0, 2, 1, 1, 2, 2, 2],
+        [0, 1, 2, 2, 1, 1, 2],
+        [1, 2, 2, 1, 1, 1, 2]
+    ]
+    heights = [1, 6, 6, 6, 6, 6, 3]
+    turn = 1
+    Game(bots={1:AlphaBetaOptimisedBot, 2:AlphaBetaOptimisedBot}, game_state=(board, heights, turn))

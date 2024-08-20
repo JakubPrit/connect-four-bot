@@ -13,7 +13,7 @@ from time import time_ns
 
 Side = tp.Literal[0, 1, 2, 3]
 Num = tp.Union[int, float]
-GameState = tp.Tuple[tp.List[tp.List[int]], tp.List[int], int]
+GameState = tp.Tuple[int, tp.List[int], int]
 
 
 class TurnResult(enum.Enum):
@@ -150,6 +150,7 @@ class GUI:
 
         self.state_label.place(anchor="center", relx=0.5, rely=self.BOARD_TOP_EXTRA_MARGIN / 2)
 
+        board = self.game.get_board()
         for row in range(self.n_rows):
             for col in range(self.n_cols):
                 self.board_canvas.create_rectangle(col * self.tile_size, row * self.tile_size,
@@ -158,7 +159,7 @@ class GUI:
                                                    fill=self.tile_bg_color,
                                                    outline=self.tile_outline_color,
                                                    tags=("tile_part"))
-                circle = self._draw_circle(row, col, self.player_colors[self.game.board[row][col]])
+                circle = self._draw_circle(row, col, self.player_colors[board[row][col]])
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
         self.root.update()
 
@@ -170,8 +171,9 @@ class GUI:
             col (int): The column of the tile to update.
         """
 
+        position_multiplier = (self.game.n_players + 1) * (row * self.game.n_cols + col + 1)
         self.board_canvas.delete("circle_{}_{}".format(row, col))
-        self._draw_circle(row, col, self.player_colors[self.game.board[row][col]])
+        self._draw_circle(row, col, self.player_colors[self.game.get_tile(row, col)])
 
     def _draw_circle(self, row, col, color):
         x0 = col * self.tile_size + self.tile_padding
@@ -209,6 +211,24 @@ class GUI:
 #############################################################
 
 
+def board_to_board_id(board: tp.List[tp.List[int]], n_players: int) -> int:
+    """ Convert a game board to a unique integer id.
+
+    Args:
+        board (tp.List[tp.List[int]]): The board to convert.
+        n_players (int): The number of players in the game.
+
+    Returns:
+        int: The unique integer id of the board.
+    """
+
+    board_id = 0
+    for row in range(len(board) - 1, -1, -1):
+        for col in range(len(board[0]) - 1, -1, -1):
+            board_id = board_id * (n_players + 1) + board[row][col]
+    return board_id
+
+
 class BaseGame:
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2,
                  game_state: tp.Optional[GameState] = None):
@@ -225,12 +245,11 @@ class BaseGame:
             n_players (int, optional): The number of players in the game. Defaults to 2.
             game_state (tp.Optional[GameState], optional):
                     The state of the game to start from. Defaults to None for a new game.
-                    The tuple should contain the board, heights, and the player turn.
-                    The board should be a list of rows (from top to bottom), each row being
-                    a list of integers (from left to right) representing the player id
-                    of the tile in that position (0 for empty). The heights should be a list
-                    of integers representing the height of each column (from left to right).
-                    The player turn should be the id of the player whose turn it is.
+                    The tuple should contain the board id, heights, and the player turn.
+                    The board id can be obtained using the board_to_board_id function.
+                    The heights should be a list of integers representing the height of each
+                    column (from left to right). The player turn should be the id of the player
+                    whose turn it is.
         """
 
         assert n_cols >= 2 and n_rows >= 2 and n_players >= 2
@@ -240,20 +259,54 @@ class BaseGame:
         self.n_rows = n_rows
         self.n_connect = n_connect
         self.n_players = n_players
-        self.board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
         self.heights = [0 for _ in range(n_cols)]
         self.player_turn = 0
         self.total_moves = 0
         self.board_id = 0
+        self.player_masked_board_ids = [0] * (n_players + 1)
         if game_state is not None:
-            self.board, self.heights, self.player_turn = game_state
+            self.board_id, self.heights, self.player_turn = game_state
             self.total_moves = sum(height for height in self.heights)
             self.player_turn -= 1
+            board = self.get_board()
             for row in range(n_rows):
                 for col in range(n_cols):
-                    self.board_id += (self.board[row][col] * (row * n_cols + col + 1)
-                                      * (self.n_players + 1))
+                    position_shift = row * n_cols + col
+                    self.player_masked_board_ids[board[row][col]] += 1 << position_shift
 
+    def get_board(self) -> tp.List[tp.List[int]]:
+        """ Get the current state of the game board.
+
+        Returns:
+            tp.List[tp.List[int]]: The board as a list of rows (from top to bottom),
+                    each row being a list of integers (from left to right) representing
+                    the player id of the tile in that position (0 for empty).
+        """
+
+        board = [[0 for _ in range(self.n_cols)] for _ in range(self.n_rows)]
+        for row in range(self.n_rows - 1, -1, -1):
+            for col in range(self.n_cols - 1, -1, -1):
+                position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
+                board[row][col] = self.board_id // position_multiplier
+                self.board_id %= position_multiplier
+
+        return board
+
+
+    def get_tile(self, row: int, col: int) -> int:
+        """ Get the player id of the tile at the given position.
+
+        Args:
+            row (int): The row of the tile.
+            col (int): The column of the tile.
+
+        Returns:
+            int: The player id of the tile (0 for empty).
+        """
+
+        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
+        next_position_multiplier = position_multiplier + (self.n_players + 1)
+        return (self.board_id % next_position_multiplier) // position_multiplier
 
 
     def place(self, col: int) -> TurnResult:
@@ -270,10 +323,11 @@ class BaseGame:
         if row < 0:
             return TurnResult.INVALID
         self.total_moves += 1
-        self.board[row][col] = self.player_turn
         self.heights[col] += 1
-        self.board_id += (self.player_turn * (row * self.n_cols + col + 1)
-                          * (self.n_players + 1))
+        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
+        print('position_multiplier:', position_multiplier, 'turn:', self.player_turn) #! DEBUG
+        self.board_id += self.player_turn * position_multiplier
+        print('board_id:', self.board_id) #! DEBUG
         if self._check_win(row, col, self.player_turn):
             return self.game_win(self.player_turn)
         elif self._check_draw():
@@ -305,26 +359,31 @@ class BaseGame:
             bool: True if the player has won, False otherwise.
         """
 
+        board = self.get_board()
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
             count = 1
             for i in range(1, self.n_connect):
                 r = row + i * dr
                 c = col + i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == player:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
                     count += 1
                 else:
                     break
             for i in range(1, self.n_connect):
                 r = row - i * dr
                 c = col - i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.board[r][c] == player:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
                     count += 1
                 else:
                     break
             if count >= self.n_connect:
                 return True
         return False
+
+        # TODO: Optimize this - don't use the board, use only the board_id instead
+
+        raise NotImplementedError
 
     def _check_draw(self) -> bool:
         """ Check if the game has ended in a draw. """
@@ -351,12 +410,7 @@ class Game(BaseGame):
                     for multiple players.
             game_state (tp.Optional[GameState], optional):
                     The state of the game to start from. Defaults to None for a new game.
-                    The tuple should contain the board, heights, and the player turn.
-                    The board should be a list of rows (from top to bottom), each row being
-                    a list of integers (from left to right) representing the player id
-                    of the tile in that position (0 for empty). The heights should be a list
-                    of integers representing the height of each column (from left to right).
-                    The player turn should be the id of the player whose turn it is.
+                    See BaseGame class for details.
             **gui_kwargs: Additional keyword arguments to pass to the GUI constructor.
                     See GUI class.
         """
@@ -380,7 +434,9 @@ class Game(BaseGame):
         """
 
         res = super().place(col)
-        self.gui.update_tile(self.n_rows - self.heights[col], col)
+        print(res, self.board_id, self.heights) #! DEBUG
+        if res:
+            self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
 
     def _next_turn(self) -> TurnResult.OK:
@@ -453,11 +509,10 @@ class BotSimulationGame(BaseGame):
         """
 
         row = self.n_rows - self.heights[col]
-        self.board[row][col] = 0
         self.heights[col] -= 1
         self.total_moves -= 1
-        self.board_id -= (self.player_turn * (row * self.n_cols + col + 1)
-                          * (self.n_players + 1))
+        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
+        self.board_id -= self.player_turn * position_multiplier
         self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
 
 
@@ -516,11 +571,8 @@ class AlphaBetaBot(Bot):
         self.initial_beta = initial_beta
 
     def _make_move(self, game: BaseGame) -> None:
-        test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players)
-        test_game.board = [row.copy() for row in game.board]
-        test_game.heights = game.heights.copy()
-        test_game.player_turn = game.player_turn
-        test_game.total_moves = game.total_moves
+        test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players,
+                                      (game.board_id, game.heights, game.player_turn))
         _, _, col = self.explore(test_game, self.max_depth)
         assert col != -1
         del test_game
@@ -733,5 +785,5 @@ if __name__ == "__main__":
     # Game()
     # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
-    Game(bots={1:deep_caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
-    # Game(n_players=3, n_connect=3)
+    # Game(bots={1:deep_caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
+    Game(n_players=3, n_connect=3)

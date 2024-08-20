@@ -26,9 +26,6 @@ class TurnResult(enum.Enum):
         return self != TurnResult.INVALID
 
 
-NO_PLAYER = 0
-
-
 #############################################################
 #                    GUI IMPLEMENTATION                     #
 #############################################################
@@ -171,7 +168,6 @@ class GUI:
             col (int): The column of the tile to update.
         """
 
-        position_multiplier = (self.game.n_players + 1) * (row * self.game.n_cols + col + 1)
         self.board_canvas.delete("circle_{}_{}".format(row, col))
         self._draw_circle(row, col, self.player_colors[self.game.get_tile(row, col)])
 
@@ -264,11 +260,23 @@ class BaseGame:
         self.total_moves = 0
         self.board_id = 0
         self.player_masked_board_ids = [0] * (n_players + 1)
+
+        position_multipliers = [1] * (n_cols * n_rows)
+        for i in range(1, n_cols * n_rows):
+            position_multipliers[i] = position_multipliers[i - 1] * (n_players + 1)
+        self.position_multipliers = [
+            position_multipliers[row * n_cols: (row + 1) * n_cols]
+            for row in range(n_rows)
+        ]
+
+        self.debug_board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
+
         if game_state is not None:
             self.board_id, self.heights, self.player_turn = game_state
             self.total_moves = sum(height for height in self.heights)
             self.player_turn -= 1
             board = self.get_board()
+            self.debug_board = board
             for row in range(n_rows):
                 for col in range(n_cols):
                     position_shift = row * n_cols + col
@@ -284,11 +292,11 @@ class BaseGame:
         """
 
         board = [[0 for _ in range(self.n_cols)] for _ in range(self.n_rows)]
+        board_id = self.board_id
         for row in range(self.n_rows - 1, -1, -1):
             for col in range(self.n_cols - 1, -1, -1):
-                position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
-                board[row][col] = self.board_id // position_multiplier
-                self.board_id %= position_multiplier
+                board[row][col] = board_id // self.position_multipliers[row][col]
+                board_id %= self.position_multipliers[row][col]
 
         return board
 
@@ -304,8 +312,8 @@ class BaseGame:
             int: The player id of the tile (0 for empty).
         """
 
-        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
-        next_position_multiplier = position_multiplier + (self.n_players + 1)
+        position_multiplier = self.position_multipliers[row][col]
+        next_position_multiplier = position_multiplier * (self.n_players + 1)
         return (self.board_id % next_position_multiplier) // position_multiplier
 
 
@@ -324,10 +332,13 @@ class BaseGame:
             return TurnResult.INVALID
         self.total_moves += 1
         self.heights[col] += 1
-        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
-        print('position_multiplier:', position_multiplier, 'turn:', self.player_turn) #! DEBUG
-        self.board_id += self.player_turn * position_multiplier
-        print('board_id:', self.board_id) #! DEBUG
+        # print('position_multiplier:', self.position_multipliers[row][col], 'turn:', self.player_turn) #! DEBUG
+        assert self.debug_board == self.get_board()
+        self.board_id += self.player_turn * self.position_multipliers[row][col]
+        self.debug_board[row][col] = self.player_turn
+        if self.debug_board != self.get_board():
+            print('place board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights)
+        # print('board_id:', self.board_id) #! DEBUG
         if self._check_win(row, col, self.player_turn):
             return self.game_win(self.player_turn)
         elif self._check_draw():
@@ -434,7 +445,7 @@ class Game(BaseGame):
         """
 
         res = super().place(col)
-        print(res, self.board_id, self.heights) #! DEBUG
+        # print(res, self.board_id, self.heights) #! DEBUG
         if res:
             self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
@@ -450,7 +461,7 @@ class Game(BaseGame):
         self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
         if self.player_turn in self.bots:
-            self.gui.root.after(10, self.bots[self.player_turn].make_move, self)
+            self.gui.root.after(500, self.bots[self.player_turn].make_move, self) # TODO Change delay back to 10
         return TurnResult.OK
 
     def _update_turn_label(self) -> None:
@@ -511,8 +522,11 @@ class BotSimulationGame(BaseGame):
         row = self.n_rows - self.heights[col]
         self.heights[col] -= 1
         self.total_moves -= 1
-        position_multiplier = (self.n_players + 1) * (row * self.n_cols + col + 1)
-        self.board_id -= self.player_turn * position_multiplier
+        assert self.debug_board == self.get_board()
+        self.board_id -= self.player_turn * self.position_multipliers[row][col]
+        self.debug_board[row][col] = 0
+        if self.debug_board != self.get_board():
+            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights)
         self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
 
 
@@ -637,6 +651,7 @@ class AlphaBetaBot(Bot):
                 outcome = simulation.place(col)
                 if outcome == TurnResult.INVALID:
                     continue
+                if outcome != TurnResult.OK: print(col, outcome, simulation.heights, '\n', simulation.get_board()) #! DEBUG
                 assert outcome == TurnResult.OK
                 score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
                 if player != current_turn:
@@ -783,7 +798,8 @@ if __name__ == "__main__":
     caching_solver = CachingAlphaBetaBot(max_depth=11, cache_min_depth=0)
     deep_caching_solver = CachingAlphaBetaBot(max_depth=14, cache_min_depth=0)
     # Game()
-    # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
+    # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
+    Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
     # Game(bots={1:deep_caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
-    Game(n_players=3, n_connect=3)
+    # Game(n_players=3, n_connect=3)

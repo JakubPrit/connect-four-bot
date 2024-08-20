@@ -686,19 +686,15 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                     Defaults to inf. Use 1 for a weak solver.
         """
 
-        if max_depth == -1:
-            max_depth = n_cols * n_rows
         self.max_depth = max_depth
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
         self.cache_min_depth = cache_min_depth
         self.cache: tp.List[tp.Dict[int, tp.Tuple[Num, int, int]]] = [
-            dict() for _ in range(max_depth + 1)]
+            dict() for _ in range(n_cols * n_rows + 1)]
     
     def make_move(self, game: BaseGame) -> None:
         super().make_move(game)
-        for _ in range(game.n_players):
-            self.cache.pop(0)
         print("Cache size:", sum(len(cache) for cache in self.cache))
 
     def explore(self, simulation: 'BotSimulationGame', depth: int,
@@ -729,8 +725,9 @@ class CachingAlphaBetaBot(AlphaBetaBot):
         if depth == 0:
             return 0, 0, -1
 
-        if simulation.board_id in self.cache[depth]:
-            return self.cache[depth][simulation.board_id]
+        turn_idx = simulation.total_moves
+        if simulation.board_id in self.cache[turn_idx]:
+            return self.cache[turn_idx][simulation.board_id]
 
         current_turn = simulation.player_turn
 
@@ -781,7 +778,7 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                     assert False # Should never happen, we should have returned already
         if depth >= self.cache_min_depth:
             # Cache the result
-            self.cache[depth][simulation.board_id] = abs(best_score), best_player, best_col
+            self.cache[turn_idx][simulation.board_id] = abs(best_score), best_player, best_col
         return abs(best_score), best_player, best_col
 
 

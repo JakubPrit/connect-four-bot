@@ -156,7 +156,7 @@ class GUI:
                                                    fill=self.tile_bg_color,
                                                    outline=self.tile_outline_color,
                                                    tags=("tile_part"))
-                circle = self._draw_circle(row, col, self.player_colors[board[row][col]])
+                self._draw_circle(row, col, self.player_colors[board[row][col]])
         self.board_canvas.tag_bind("tile_part", "<Button-1>", self._on_tile_click)
         self.root.update()
 
@@ -171,20 +171,20 @@ class GUI:
         self.board_canvas.delete("circle_{}_{}".format(row, col))
         self._draw_circle(row, col, self.player_colors[self.game.get_tile(row, col)])
 
-    def _draw_circle(self, row, col, color):
+    def _draw_circle(self, row, col, color) -> None:
         x0 = col * self.tile_size + self.tile_padding
         y0 = row * self.tile_size + self.tile_padding
         x1 = (col + 1) * self.tile_size - self.tile_padding
         y1 = (row + 1) * self.tile_size - self.tile_padding
-        return self.board_canvas.create_oval(x0, y0, x1, y1, fill=color, outline="",
-                                             tags=("tile_part", "circle_{}_{}".format(row, col)))
+        self.board_canvas.create_oval(x0, y0, x1, y1, fill=color, outline="",
+                                      tags=("tile_part", "circle_{}_{}".format(row, col)))
 
-    def _on_tile_click(self, event: tk.Event):
+    def _on_tile_click(self, event: tk.Event) -> None:
         col = event.x // self.tile_size
         if 0 <= col < self.n_cols and self.game.player_turn not in self.game.bots:
             self.game.place(col)
 
-    def set_state_label(self, text: str, player: int = -1):
+    def set_state_label(self, text: str, player: int = -1) -> None:
         """ Set the text of the state label and color it according to the player.
 
         Args:
@@ -269,13 +269,10 @@ class BaseGame:
             for row in range(n_rows)
         ]
 
-        self.debug_board = [[0 for _ in range(n_cols)] for _ in range(n_rows)]
-
         if game_state is not None:
             self.board_id, self.heights, self.player_turn = game_state
             self.total_moves = sum(height for height in self.heights)
             board = self.get_board()
-            self.debug_board = board
             for row in range(n_rows):
                 for col in range(n_cols):
                     position_shift = row * n_cols + col
@@ -331,15 +328,9 @@ class BaseGame:
             return TurnResult.INVALID
         self.total_moves += 1
         self.heights[col] += 1
-        # print('position_multiplier:', self.position_multipliers[row][col], 'turn:', self.player_turn) #! DEBUG
-        assert self.debug_board == self.get_board()
         self.board_id += self.player_turn * self.position_multipliers[row][col]
         self.player_masked_board_ids[self.player_turn] |= 1 << (row * self.n_cols + col)
 
-        self.debug_board[row][col] = self.player_turn
-        if self.debug_board != self.get_board(): #! DEBUG
-            print('place board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights) #! DEBUG
-        # print('board_id:', self.board_id) #! DEBUG
         if self._check_win(row, col, self.player_turn):
             return self.game_win(self.player_turn)
         elif self._check_draw():
@@ -371,31 +362,7 @@ class BaseGame:
             bool: True if the player has won, False otherwise.
         """
 
-        # board = self.get_board()
-        # directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        # for dr, dc in directions:
-        #     count = 1
-        #     for i in range(1, self.n_connect):
-        #         r = row + i * dr
-        #         c = col + i * dc
-        #         if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
-        #             count += 1
-        #         else:
-        #             break
-        #     for i in range(1, self.n_connect):
-        #         r = row - i * dr
-        #         c = col - i * dc
-        #         if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
-        #             count += 1
-        #         else:
-        #             break
-        #     if count >= self.n_connect:
-        #         return True
-        # return False
-
-        # TODO: Optimize this - don't use the board, use only the board_id instead
-
-        # raise NotImplementedError
+        # TODO: Optimize this
 
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
@@ -468,7 +435,6 @@ class Game(BaseGame):
         """
 
         res = super().place(col)
-        # print(res, self.board_id, self.heights) #! DEBUG
         if res:
             self.gui.update_tile(self.n_rows - self.heights[col], col)
         return res
@@ -484,7 +450,7 @@ class Game(BaseGame):
         self.player_turn = self.player_turn % self.n_players + 1
         self._update_turn_label()
         if self.player_turn in self.bots:
-            self.gui.root.after(500, self.bots[self.player_turn].make_move, self) # TODO Change delay back to 10
+            self.gui.root.after(10, self.bots[self.player_turn].make_move, self)
         return TurnResult.OK
 
     def _update_turn_label(self) -> None:
@@ -544,7 +510,7 @@ class BotSimulationGame(BaseGame):
         self._next_turn()
         return TurnResult.DRAW
 
-    def undo_turn(self, col: int, debug_current_turn) -> None:
+    def undo_turn(self, col: int) -> None:
         """ Unplace the tile in the given column and update the game state.
 
         Args:
@@ -554,13 +520,9 @@ class BotSimulationGame(BaseGame):
         row = self.n_rows - self.heights[col]
         self.heights[col] -= 1
         self.total_moves -= 1
-        assert self.debug_board == self.get_board()
         self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
         self.board_id -= self.player_turn * self.position_multipliers[row][col]
         self.player_masked_board_ids[self.player_turn] -= 1 << (row * self.n_cols + col)
-        self.debug_board[row][col] = 0
-        if self.debug_board != self.get_board(): #! DEBUG
-            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights, row, col, self.player_turn, debug_current_turn) #! DEBUG
 
 
 #############################################################
@@ -660,9 +622,7 @@ class AlphaBetaBot(Bot):
             outcome = simulation.place(col)
             if outcome == TurnResult.INVALID:
                 continue
-            simulation.undo_turn(col, debug_current_turn=current_turn)
-            if simulation.player_turn != current_turn: #! DEBUG
-                print('turn mismatch in win/draw check:', simulation.player_turn, current_turn) #! DEBUG
+            simulation.undo_turn(col)
             simulation.player_turn = current_turn
             if outcome == TurnResult.WIN:
                 # The game is won by this move
@@ -686,14 +646,11 @@ class AlphaBetaBot(Bot):
                 outcome = simulation.place(col)
                 if outcome == TurnResult.INVALID:
                     continue
-                if outcome != TurnResult.OK: print(col, outcome, simulation.heights, '\n', simulation.get_board()) #! DEBUG
                 assert outcome == TurnResult.OK
                 score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
                 if player != current_turn:
                     score = -score
-                simulation.undo_turn(col, debug_current_turn=current_turn)
-                if simulation.player_turn != current_turn: #! DEBUG
-                    print('turn mismatch in main exploration:', simulation.player_turn, current_turn) #! DEBUG
+                simulation.undo_turn(col)
                 simulation.player_turn = current_turn
                 if score > best_score:
                     best_score, best_player, best_col = score, player, col
@@ -775,9 +732,7 @@ class CachingAlphaBetaBot(AlphaBetaBot):
             outcome = simulation.place(col)
             if outcome == TurnResult.INVALID:
                 continue
-            simulation.undo_turn(col, debug_current_turn=current_turn)
-            if simulation.player_turn != current_turn: #! DEBUG
-                print('turn mismatch in win/draw check:', simulation.player_turn, current_turn) #! DEBUG
+            simulation.undo_turn(col)
             simulation.player_turn = current_turn
             if outcome == TurnResult.WIN:
                 # The game is won by this move
@@ -805,9 +760,7 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                 score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
                 if player != current_turn:
                     score = -score
-                simulation.undo_turn(col, debug_current_turn=current_turn)
-                if simulation.player_turn != current_turn: #! DEBUG
-                    print('turn mismatch in main exploration:', simulation.player_turn, current_turn) #! DEBUG
+                simulation.undo_turn(col)
                 simulation.player_turn = current_turn
 
                 if score > best_score:
@@ -825,7 +778,6 @@ class CachingAlphaBetaBot(AlphaBetaBot):
         return abs(best_score), best_player, best_col
 
 
-
 #############################################################
 #                          TESTING                          #
 #############################################################
@@ -837,10 +789,10 @@ if __name__ == "__main__":
     weak_solver = AlphaBetaBot(max_depth=11, initial_alpha=-1, initial_beta=1)
     deep_weak_solver = AlphaBetaBot(max_depth=13, initial_alpha=-1, initial_beta=1)
     caching_solver = CachingAlphaBetaBot(max_depth=11, cache_min_depth=0)
-    deep_caching_solver = CachingAlphaBetaBot(max_depth=14, cache_min_depth=0)
+    deep_caching_solver = CachingAlphaBetaBot(max_depth=17, cache_min_depth=0)
     # Game()
     # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
-    Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
+    # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
-    # Game(bots={1:deep_caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
+    Game(bots={1:deep_caching_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
     # Game(n_players=3, n_connect=3)

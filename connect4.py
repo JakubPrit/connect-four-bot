@@ -274,13 +274,12 @@ class BaseGame:
         if game_state is not None:
             self.board_id, self.heights, self.player_turn = game_state
             self.total_moves = sum(height for height in self.heights)
-            self.player_turn -= 1
             board = self.get_board()
             self.debug_board = board
             for row in range(n_rows):
                 for col in range(n_cols):
                     position_shift = row * n_cols + col
-                    self.player_masked_board_ids[board[row][col]] += 1 << position_shift
+                    self.player_masked_board_ids[board[row][col]] |= 1 << position_shift
 
     def get_board(self) -> tp.List[tp.List[int]]:
         """ Get the current state of the game board.
@@ -335,9 +334,11 @@ class BaseGame:
         # print('position_multiplier:', self.position_multipliers[row][col], 'turn:', self.player_turn) #! DEBUG
         assert self.debug_board == self.get_board()
         self.board_id += self.player_turn * self.position_multipliers[row][col]
+        self.player_masked_board_ids[self.player_turn] |= 1 << (row * self.n_cols + col)
+
         self.debug_board[row][col] = self.player_turn
-        if self.debug_board != self.get_board():
-            print('place board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights)
+        if self.debug_board != self.get_board(): #! DEBUG
+            print('place board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights) #! DEBUG
         # print('board_id:', self.board_id) #! DEBUG
         if self._check_win(row, col, self.player_turn):
             return self.game_win(self.player_turn)
@@ -370,21 +371,46 @@ class BaseGame:
             bool: True if the player has won, False otherwise.
         """
 
-        board = self.get_board()
+        # board = self.get_board()
+        # directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        # for dr, dc in directions:
+        #     count = 1
+        #     for i in range(1, self.n_connect):
+        #         r = row + i * dr
+        #         c = col + i * dc
+        #         if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
+        #             count += 1
+        #         else:
+        #             break
+        #     for i in range(1, self.n_connect):
+        #         r = row - i * dr
+        #         c = col - i * dc
+        #         if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
+        #             count += 1
+        #         else:
+        #             break
+        #     if count >= self.n_connect:
+        #         return True
+        # return False
+
+        # TODO: Optimize this - don't use the board, use only the board_id instead
+
+        # raise NotImplementedError
+
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
             count = 1
             for i in range(1, self.n_connect):
                 r = row + i * dr
                 c = col + i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c)):
                     count += 1
                 else:
                     break
             for i in range(1, self.n_connect):
                 r = row - i * dr
                 c = col - i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and board[r][c] == player:
+                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c)):
                     count += 1
                 else:
                     break
@@ -392,9 +418,6 @@ class BaseGame:
                 return True
         return False
 
-        # TODO: Optimize this - don't use the board, use only the board_id instead
-
-        raise NotImplementedError
 
     def _check_draw(self) -> bool:
         """ Check if the game has ended in a draw. """
@@ -503,16 +526,25 @@ class BotSimulationGame(BaseGame):
         moves without affecting the actual game state. """
 
     def _next_turn(self) -> TurnResult.OK:
+        """ Internal method to handle updating the turn to the next player.
+            Is called after every valid move.
+
+        Returns:
+            TurnResult.OK: The result of the turn (the turn was successful, no win or draw).
+        """
+
         self.player_turn = self.player_turn % self.n_players + 1
         return TurnResult.OK
 
     def game_win(self, player: int) -> TurnResult.WIN:
+        self._next_turn()
         return TurnResult.WIN
 
     def game_draw(self) -> TurnResult.DRAW:
+        self._next_turn()
         return TurnResult.DRAW
 
-    def undo_turn(self, col: int) -> None:
+    def undo_turn(self, col: int, debug_current_turn) -> None:
         """ Unplace the tile in the given column and update the game state.
 
         Args:
@@ -525,9 +557,10 @@ class BotSimulationGame(BaseGame):
         assert self.debug_board == self.get_board()
         self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
         self.board_id -= self.player_turn * self.position_multipliers[row][col]
+        self.player_masked_board_ids[self.player_turn] -= 1 << (row * self.n_cols + col)
         self.debug_board[row][col] = 0
-        if self.debug_board != self.get_board():
-            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights, row, col, self.player_turn)
+        if self.debug_board != self.get_board(): #! DEBUG
+            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights, row, col, self.player_turn, debug_current_turn) #! DEBUG
 
 
 #############################################################
@@ -627,7 +660,9 @@ class AlphaBetaBot(Bot):
             outcome = simulation.place(col)
             if outcome == TurnResult.INVALID:
                 continue
-            simulation.undo_turn(col)
+            simulation.undo_turn(col, debug_current_turn=current_turn)
+            if simulation.player_turn != current_turn: #! DEBUG
+                print('turn mismatch in win/draw check:', simulation.player_turn, current_turn) #! DEBUG
             simulation.player_turn = current_turn
             if outcome == TurnResult.WIN:
                 # The game is won by this move
@@ -656,7 +691,9 @@ class AlphaBetaBot(Bot):
                 score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
                 if player != current_turn:
                     score = -score
-                simulation.undo_turn(col)
+                simulation.undo_turn(col, debug_current_turn=current_turn)
+                if simulation.player_turn != current_turn: #! DEBUG
+                    print('turn mismatch in main exploration:', simulation.player_turn, current_turn) #! DEBUG
                 simulation.player_turn = current_turn
                 if score > best_score:
                     best_score, best_player, best_col = score, player, col
@@ -738,7 +775,9 @@ class CachingAlphaBetaBot(AlphaBetaBot):
             outcome = simulation.place(col)
             if outcome == TurnResult.INVALID:
                 continue
-            simulation.undo_turn(col)
+            simulation.undo_turn(col, debug_current_turn=current_turn)
+            if simulation.player_turn != current_turn: #! DEBUG
+                print('turn mismatch in win/draw check:', simulation.player_turn, current_turn) #! DEBUG
             simulation.player_turn = current_turn
             if outcome == TurnResult.WIN:
                 # The game is won by this move
@@ -766,7 +805,9 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                 score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
                 if player != current_turn:
                     score = -score
-                simulation.undo_turn(col)
+                simulation.undo_turn(col, debug_current_turn=current_turn)
+                if simulation.player_turn != current_turn: #! DEBUG
+                    print('turn mismatch in main exploration:', simulation.player_turn, current_turn) #! DEBUG
                 simulation.player_turn = current_turn
 
                 if score > best_score:

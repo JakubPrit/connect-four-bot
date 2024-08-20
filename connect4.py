@@ -669,30 +669,37 @@ class CachingAlphaBetaBot(AlphaBetaBot):
         This bot is able to play in games with more than 2 players. It caches some of the
         results of the search to speed up the computation. """
 
-    def __init__(self, max_depth: int = -1, initial_alpha: Num = -float('inf'),
-                 initial_beta: Num = float('inf'), cache_min_depth: int = 0):
+    def __init__(self, n_cols: int, n_rows: int, max_depth: int = -1, cache_min_depth: int = 0,
+                 initial_alpha: Num = -float('inf'), initial_beta: Num = float('inf')):
         """ Initialize the bot.
 
         Args:
+            n_cols (int): The number of columns in the game board.
+            n_rows (int): The number of rows in the game board.
             max_depth (int, optional): The maximum depth of the search tree to explore.
                     Defaults to -1 for no limit.
+            cache_min_depth (int, optional): The minimum depth of the search tree to cache results.
+                    Defaults to 0 for caching all results. USE A HIGHER VALUE FOR DEEP SEARCHES.
             default_alpha (Num, optional): The initial value of alpha for alpha-beta pruning.
                     Defaults to -inf. Use -1 for a weak solver.
             default_beta (Num, optional): The initial value of beta for alpha-beta pruning.
                     Defaults to inf. Use 1 for a weak solver.
-            cache_min_depth (int, optional): The minimum depth of the search tree to cache results.
-                    Defaults to 0 for caching all results. USE A HIGHER VALUE FOR DEEP SEARCHES.
         """
 
+        if max_depth == -1:
+            max_depth = n_cols * n_rows
         self.max_depth = max_depth
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
         self.cache_min_depth = cache_min_depth
-        self.cache: tp.Dict[int, tp.Tuple[Num, int, int]] = {}
+        self.cache: tp.List[tp.Dict[int, tp.Tuple[Num, int, int]]] = [
+            dict() for _ in range(max_depth + 1)]
     
     def make_move(self, game: BaseGame) -> None:
         super().make_move(game)
-        print("Cache size:", len(self.cache))
+        for _ in range(game.n_players):
+            self.cache.pop(0)
+        print("Cache size:", sum(len(cache) for cache in self.cache))
 
     def explore(self, simulation: 'BotSimulationGame', depth: int,
                 alpha: tp.Optional[Num] = None,
@@ -714,9 +721,6 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                     is expected or the search was cut off, and the column of the move.
         """
 
-        if simulation.board_id in self.cache:
-            return self.cache[simulation.board_id]
-
         if alpha is None or beta is None:
             alpha = self.initial_alpha
             beta = self.initial_beta
@@ -724,6 +728,9 @@ class CachingAlphaBetaBot(AlphaBetaBot):
 
         if depth == 0:
             return 0, 0, -1
+
+        if simulation.board_id in self.cache[depth]:
+            return self.cache[depth][simulation.board_id]
 
         current_turn = simulation.player_turn
 
@@ -774,7 +781,7 @@ class CachingAlphaBetaBot(AlphaBetaBot):
                     assert False # Should never happen, we should have returned already
         if depth >= self.cache_min_depth:
             # Cache the result
-            self.cache[simulation.board_id] = abs(best_score), best_player, best_col
+            self.cache[depth][simulation.board_id] = abs(best_score), best_player, best_col
         return abs(best_score), best_player, best_col
 
 
@@ -788,11 +795,11 @@ if __name__ == "__main__":
     deep_strong_solver = AlphaBetaBot(max_depth=13)
     weak_solver = AlphaBetaBot(max_depth=11, initial_alpha=-1, initial_beta=1)
     deep_weak_solver = AlphaBetaBot(max_depth=13, initial_alpha=-1, initial_beta=1)
-    caching_solver = CachingAlphaBetaBot(max_depth=11, cache_min_depth=0)
-    deep_caching_solver = CachingAlphaBetaBot(max_depth=17, cache_min_depth=0)
+    caching_solver = CachingAlphaBetaBot(7, 6, max_depth=11, cache_min_depth=0)
+    deep_caching_solver = CachingAlphaBetaBot(7, 6, max_depth=13, cache_min_depth=2)
     # Game()
     # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
-    # Game(bots={1:strong_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
-    Game(bots={1:deep_caching_solver, 2:deep_strong_solver}, n_connect=4, n_players=2)
+    Game(bots={1:strong_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
+    # Game(bots={1:deep_caching_solver, 2:strong_solver, 3:RandomBot()}, n_connect=4, n_players=3)
     # Game(n_players=3, n_connect=3)

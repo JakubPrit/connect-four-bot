@@ -523,11 +523,11 @@ class BotSimulationGame(BaseGame):
         self.heights[col] -= 1
         self.total_moves -= 1
         assert self.debug_board == self.get_board()
+        self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
         self.board_id -= self.player_turn * self.position_multipliers[row][col]
         self.debug_board[row][col] = 0
         if self.debug_board != self.get_board():
-            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights)
-        self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
+            print('undo board mismatch:', self.debug_board, self.get_board(), self.board_id, self.heights, row, col, self.player_turn)
 
 
 #############################################################

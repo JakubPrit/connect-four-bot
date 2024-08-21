@@ -34,6 +34,14 @@ class TurnResult(enum.Enum):
 
 
 class GUI:
+    WIN_TEXT = "Player {} won!"
+    DRAW_TEXT = "It's a draw!"
+    TURN_TEXT = "Player {}'s turn"
+
+    DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green',
+                             'cyan', 'maroon', 'pink', 'darkgreen']
+    LABEL_FONT = "TkDefaultFont 20 bold"
+
     BOARD_TOP_EXTRA_MARGIN = 0.1
     BOARD_MARGIN = 0.05
     TILE_PADDING_RATIO = 0.1
@@ -42,12 +50,6 @@ class GUI:
     TILE_OUTLINE_WIDTH = 2
     MIN_WINDOW_WIDTH = 350
     MIN_WINDOW_HEIGHT = 350
-    DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green',
-                             'cyan', 'maroon', 'pink', 'darkgreen', 'black']
-    LABEL_FONT = "TkDefaultFont 20 bold"
-    WIN_TEXT = "Player {} won!"
-    DRAW_TEXT = "It's a draw!"
-    TURN_TEXT = "Player {}'s turn"
 
     def __init__(self, game: 'Game', tile_size: int = 100, tile_bg_color: str = "#909090",
                  outline_color: str = "white", window_bg_color: str = "#909090",
@@ -208,18 +210,44 @@ class GUI:
 
 
 class MainMenu:
+    TITLE_TEXT = "Connect 4 Menu"
+    CONNECT_TEXT = "Connect"
+    SETTINGS_LABEL_TEXT = "Settings"
+    SETTINGS_TEXTS = {
+        'n_cols': "Number of columns",
+        'n_rows': "Number of rows",
+        'n_connect': "Number of tiles to connect",
+        'n_players': "Number of players",
+    }
+
+    # value = (min, default, max)
+    GENERAL_SETTINGS = {
+        'n_cols': (2, 7, 10),
+        'n_rows': (2, 6, 10),
+        'n_connect': (2, 4, 10),
+        'n_players': (2, 2, 9),
+    }
+
     BG_COLOR = "#909090"
-    TITLE = "Connect 4 Menu"
-    CONNECT_LABEL = "Connect"
     LABEL_FONT = "TkDefaultFont 40 bold"
+    SETTINGS_FONT = "TkDefaultFont 10"
+
     WINDOW_WIDTH = 600
     WINDOW_HEIGHT = 400
     MIN_WINDOW_WIDTH = 300
     MIN_WINDOW_HEIGHT = 200
+    TITLE_REL_Y = 0.15
+    TITLE_SETTINGS_SEP_REL_Y = 0.25
+    TITLE_SETTINGS_SEP_REL_WIDTH = 0.8
+    SETTINGS_TOP_REL_Y = 0.3
+    SETTINGS_BOTTOM_REL_Y = 0.75
+    SETTINGS_REL_WIDTH = 0.7
 
     def __init__(self):
+        RED, YELLOW = 'red', 'yellow'
+
         self.root = tk.Tk()
-        self.root.title(MainMenu.TITLE)
+        self.root.title(MainMenu.TITLE_TEXT)
         self.root.geometry("{}x{}".format(MainMenu.WINDOW_WIDTH, MainMenu.WINDOW_HEIGHT))
         self.root.minsize(MainMenu.MIN_WINDOW_WIDTH, MainMenu.MIN_WINDOW_HEIGHT)
 
@@ -230,18 +258,63 @@ class MainMenu:
         self.title_frame = tk.Frame(self.root_canvas)
         self.title_frame.pack(fill="both", expand=True)
         self.title_frame.config(bg=MainMenu.BG_COLOR)
-        self.title_frame.place(anchor="center", relx=0.5, rely=0.2)
-        self.title_label_1 = tk.Label(self.title_frame, text=MainMenu.CONNECT_LABEL + " ",
+        self.title_frame.place(anchor="center", relx=0.5, rely=MainMenu.TITLE_REL_Y)
+        self.title_label_1 = tk.Label(self.title_frame, text=MainMenu.CONNECT_TEXT + " ",
                                       font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
-                                      fg="yellow")
+                                      fg=YELLOW)
         self.title_label_2 = tk.Label(self.title_frame, text="4",
                                       font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
-                                      fg="red")
+                                      fg=RED)
         self.title_label_1.pack(side="left")
         self.title_label_2.pack(side="left")
 
         self.title_settings_separator = ttk.Separator(self.root_canvas, orient="horizontal")
-        self.title_settings_separator.place(relx=0.1, rely=0.3, relwidth=0.8)
+        self.title_settings_separator.place(relx=(1 - MainMenu.TITLE_SETTINGS_SEP_REL_WIDTH) / 2,
+                                            rely=MainMenu.TITLE_SETTINGS_SEP_REL_Y,
+                                            relwidth=MainMenu.TITLE_SETTINGS_SEP_REL_WIDTH)
+
+        self.settings_frame = tk.Frame(self.root_canvas)
+        self.settings_frame.pack(fill="both", expand=True)
+        self.settings_frame.config(bg=MainMenu.BG_COLOR, highlightthickness=0)
+        settings_rel_height = MainMenu.SETTINGS_BOTTOM_REL_Y - MainMenu.SETTINGS_TOP_REL_Y
+        self.settings_frame.place(anchor="nw", rely=MainMenu.SETTINGS_TOP_REL_Y,
+                                  relx=(1 - MainMenu.SETTINGS_REL_WIDTH) / 2,
+                                  relwidth=MainMenu.SETTINGS_REL_WIDTH,
+                                  relheight=settings_rel_height)
+
+        self.settings_label = tk.Label(self.settings_frame, text=MainMenu.SETTINGS_LABEL_TEXT,
+                                       font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=RED,
+                                       anchor="w")
+        self.settings_label.grid(row=0, column=0, sticky="nsew")
+
+        self.settings_labels = {}
+        self.settings_scale = {}
+        self.settings_var = {}
+        self.settings_val_label = {}
+        self.scale_style = ttk.Style()
+        self.scale_style.configure('TScale', background=MainMenu.BG_COLOR)
+        for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
+            self.settings_var[key] = tk.IntVar(value=default_val)
+            self.settings_labels[key] = tk.Label(self.settings_frame,
+                                                text=MainMenu.SETTINGS_TEXTS[key],
+                                                font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR,
+                                                fg=YELLOW, anchor="w")
+            self.settings_labels[key].grid(row=len(self.settings_labels), column=0, sticky="nsew")
+            self.settings_scale[key] = ttk.Scale(self.settings_frame, from_=min_val, to=max_val,
+                                                 orient="horizontal",
+                                                 variable=self.settings_var[key],
+                                                 command=(lambda val, key=key: # type: ignore
+                                                          self.settings_var[key].set(int(float(val)))),
+                                                 style='TScale')
+            self.settings_scale[key].set(default_val)
+            self.settings_scale[key].grid(row=len(self.settings_scale), column=1, sticky="nsew")
+            self.settings_val_label[key] = tk.Label(self.settings_frame,
+                                                   textvariable=self.settings_var[key],
+                                                   font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR,
+                                                   fg=RED, anchor="w")
+            self.settings_val_label[key].grid(row=len(self.settings_val_label), column=2, sticky="nsew")
+        self.root.grid_columnconfigure(0, weight=5)
+        self.root.update()
 
         self.root.mainloop()
 

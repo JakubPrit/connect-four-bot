@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import typing as tp
 import enum
 from abc import abstractmethod
@@ -8,7 +9,7 @@ from functools import lru_cache
 
 
 #############################################################
-#              TYPE DEFINITIONS AND CONSTANTS               #
+#                     TYPE DEFINITIONS                      #
 #############################################################
 
 
@@ -33,6 +34,21 @@ class TurnResult(enum.Enum):
 
 
 class GUI:
+    BOARD_TOP_EXTRA_MARGIN = 0.1
+    BOARD_MARGIN = 0.05
+    TILE_PADDING_RATIO = 0.1
+    BOARD_OUTLINE_RATIO = 0.01
+    MIN_BOARD_OUTLINE_WIDTH = 3
+    TILE_OUTLINE_WIDTH = 2
+    MIN_WINDOW_WIDTH = 350
+    MIN_WINDOW_HEIGHT = 350
+    DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green',
+                             'cyan', 'maroon', 'pink', 'darkgreen', 'black']
+    LABEL_FONT = "TkDefaultFont 20 bold"
+    WIN_TEXT = "Player {} won!"
+    DRAW_TEXT = "It's a draw!"
+    TURN_TEXT = "Player {}'s turn"
+
     def __init__(self, game: 'Game', tile_size: int = 100, tile_bg_color: str = "#909090",
                  outline_color: str = "white", window_bg_color: str = "#909090",
                  player_colors: tp.Optional[tp.List[str]] = None, draw_color: str = "white",
@@ -55,27 +71,15 @@ class GUI:
             window_title (str, optional): The title of the game window. Defaults to "Connect 4".
         """
 
-        self.MIN_TILE_SIZE = 32
-        self.BOARD_TOP_EXTRA_MARGIN = 0.1
-        self.BOARD_MARGIN = 0.05
-        self.TILE_PADDING_RATIO = 0.1
-        self.BOARD_OUTLINE_RATIO = 0.01
-        self.MIN_BOARD_OUTLINE_WIDTH = 3
-        self.TILE_OUTLINE_WIDTH = 2
-        self.MIN_WINDOW_WIDTH = 350
-        self.MIN_WINDOW_HEIGHT = 350
-        self.DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'purple', 'green',
-                                      'cyan', 'maroon', 'pink', 'darkgreen', 'black']
-
         self.game = game
         self.n_cols = game.n_cols
         self.n_rows = game.n_rows
         self.tile_size = tile_size
-        self.board_width = self.tile_size * game.n_cols - self.TILE_OUTLINE_WIDTH
-        self.board_height = self.tile_size * game.n_rows - self.TILE_OUTLINE_WIDTH
-        self.window_width = int(self.board_width * (1 + 2 * self.BOARD_MARGIN))
-        self.window_height = int(self.board_height * (1 + 2 * self.BOARD_MARGIN
-                                                      + self.BOARD_TOP_EXTRA_MARGIN))
+        self.board_width = self.tile_size * game.n_cols - GUI.TILE_OUTLINE_WIDTH
+        self.board_height = self.tile_size * game.n_rows - GUI.TILE_OUTLINE_WIDTH
+        self.window_width = int(self.board_width * (1 + 2 * GUI.BOARD_MARGIN))
+        self.window_height = int(self.board_height * (1 + 2 * GUI.BOARD_MARGIN
+                                                      + GUI.BOARD_TOP_EXTRA_MARGIN))
 
         self.window_bg_color = window_bg_color
         self.tile_bg_color = tile_bg_color
@@ -85,14 +89,14 @@ class GUI:
         self.no_player_color = no_player_color
         self.draw_color = draw_color
         if player_colors is None:
-            self.player_colors = [self.no_player_color, *self.DEFAULT_PLAYER_COLORS]
+            self.player_colors = [self.no_player_color, *GUI.DEFAULT_PLAYER_COLORS]
         else:
             self.player_colors = [self.no_player_color, *player_colors]
 
         self.root = tk.Tk()
         self.root.title(self.window_title)
         self.root.geometry("{}x{}".format(self.window_width, self.window_height))
-        self.root.minsize(self.MIN_WINDOW_WIDTH, self.MIN_WINDOW_HEIGHT)
+        self.root.minsize(GUI.MIN_WINDOW_WIDTH, GUI.MIN_WINDOW_HEIGHT)
         self.root_frame = tk.Frame(self.root)
         self.root_frame.pack(fill="both", expand=True)
         self.root_frame.config(bg=self.window_bg_color)
@@ -100,7 +104,7 @@ class GUI:
         self.board_frame: tk.Frame
         self.board_canvas: tk.Canvas
         self.state_label = tk.Label(self.root_frame, text="Initializing...",
-                                    font="TkDefaultFont 20 bold", bg=self.window_bg_color)
+                                    font=GUI.LABEL_FONT, bg=self.window_bg_color)
         self.state_label.pack(expand=True)
 
         self._draw_board()
@@ -111,12 +115,12 @@ class GUI:
             self.window_width = event.width
             self.window_height = event.height
             self.root_frame.config(width=self.window_width, height=self.window_height)
-            horizontal_margin = 2 * self.BOARD_MARGIN
-            vertical_margin = 2 * self.BOARD_MARGIN + self.BOARD_TOP_EXTRA_MARGIN
+            horizontal_margin = 2 * GUI.BOARD_MARGIN
+            vertical_margin = 2 * GUI.BOARD_MARGIN + GUI.BOARD_TOP_EXTRA_MARGIN
             self.tile_size = min(int(event.width / (1 + horizontal_margin)) // self.n_cols,
                                  int(event.height / (1 + vertical_margin)) // self.n_rows)
-            self.board_width = self.tile_size * self.n_cols - self.TILE_OUTLINE_WIDTH
-            self.board_height = self.tile_size * self.n_rows - self.TILE_OUTLINE_WIDTH
+            self.board_width = self.tile_size * self.n_cols - GUI.TILE_OUTLINE_WIDTH
+            self.board_height = self.tile_size * self.n_rows - GUI.TILE_OUTLINE_WIDTH
             self.redraw_board()
 
     def redraw_board(self) -> None:
@@ -130,10 +134,10 @@ class GUI:
         self._draw_board()
 
     def _draw_board(self):
-        self.board_outline_width = max(self.MIN_BOARD_OUTLINE_WIDTH,
+        self.board_outline_width = max(GUI.MIN_BOARD_OUTLINE_WIDTH,
                                        min(self.board_width, self.board_height)
-                                       * self.BOARD_OUTLINE_RATIO // 1)
-        self.tile_padding = self.tile_size * self.TILE_PADDING_RATIO // 1
+                                       * GUI.BOARD_OUTLINE_RATIO // 1)
+        self.tile_padding = self.tile_size * GUI.TILE_PADDING_RATIO // 1
 
         self.board_frame = tk.Frame(self.root_frame, width=self.board_width,
                                     height=self.board_height,
@@ -141,12 +145,12 @@ class GUI:
                                     highlightbackground=self.board_outline_color,
                                     highlightthickness=self.board_outline_width)
         self.board_frame.place(anchor="center", relx=0.5,
-                               rely=0.5 + self.BOARD_TOP_EXTRA_MARGIN / 2)
+                               rely=0.5 + GUI.BOARD_TOP_EXTRA_MARGIN / 2)
         self.board_canvas = tk.Canvas(self.board_frame, width=self.board_width,
                                       height=self.board_height)
         self.board_canvas.pack()
 
-        self.state_label.place(anchor="center", relx=0.5, rely=self.BOARD_TOP_EXTRA_MARGIN / 2)
+        self.state_label.place(anchor="center", relx=0.5, rely=GUI.BOARD_TOP_EXTRA_MARGIN / 2)
 
         board = self.game.get_board()
         for row in range(self.n_rows):
@@ -201,6 +205,45 @@ class GUI:
         """ Disable placing new tiles on the board by unbinding the tile click event. """
 
         self.board_canvas.tag_unbind("tile_part", "<Button-1>")
+
+
+class MainMenu:
+    BG_COLOR = "#909090"
+    TITLE = "Connect 4 Menu"
+    CONNECT_LABEL = "Connect"
+    LABEL_FONT = "TkDefaultFont 40 bold"
+    WINDOW_WIDTH = 600
+    WINDOW_HEIGHT = 400
+    MIN_WINDOW_WIDTH = 300
+    MIN_WINDOW_HEIGHT = 200
+
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title(MainMenu.TITLE)
+        self.root.geometry("{}x{}".format(MainMenu.WINDOW_WIDTH, MainMenu.WINDOW_HEIGHT))
+        self.root.minsize(MainMenu.MIN_WINDOW_WIDTH, MainMenu.MIN_WINDOW_HEIGHT)
+
+        self.root_canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.root_canvas.pack(fill="both", expand=True)
+        self.root_canvas.config(bg=MainMenu.BG_COLOR)
+
+        self.title_frame = tk.Frame(self.root_canvas)
+        self.title_frame.pack(fill="both", expand=True)
+        self.title_frame.config(bg=MainMenu.BG_COLOR)
+        self.title_frame.place(anchor="center", relx=0.5, rely=0.2)
+        self.title_label_1 = tk.Label(self.title_frame, text=MainMenu.CONNECT_LABEL + " ",
+                                      font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
+                                      fg="yellow")
+        self.title_label_2 = tk.Label(self.title_frame, text="4",
+                                      font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
+                                      fg="red")
+        self.title_label_1.pack(side="left")
+        self.title_label_2.pack(side="left")
+
+        self.title_settings_separator = ttk.Separator(self.root_canvas, orient="horizontal")
+        self.title_settings_separator.place(relx=0.1, rely=0.3, relwidth=0.8)
+
+        self.root.mainloop()
 
 
 #############################################################
@@ -459,7 +502,7 @@ class Game(BaseGame):
         return TurnResult.OK
 
     def _update_turn_label(self) -> None:
-        self.gui.set_state_label("Player {}'s turn".format(self.player_turn), self.player_turn)
+        self.gui.set_state_label(GUI.TURN_TEXT.format(self.player_turn), self.player_turn)
 
     def game_win(self, player: int) -> TurnResult.WIN:
         """ Handle the game being won by a player.
@@ -471,7 +514,7 @@ class Game(BaseGame):
             TurnResult.WIN: The result of the game.
         """
 
-        self.gui.set_state_label("Player {} won!".format(player), player)
+        self.gui.set_state_label(GUI.WIN_TEXT.format(player), player)
         self.end_game()
         return TurnResult.WIN
 
@@ -482,7 +525,7 @@ class Game(BaseGame):
             TurnResult.DRAW: The result of the game.
         """
 
-        self.gui.set_state_label("It's a draw!")
+        self.gui.set_state_label(GUI.DRAW_TEXT)
         self.end_game()
         return TurnResult.DRAW
 
@@ -732,8 +775,11 @@ class CachingAlphaBetaBot(Bot):
 
 
 if __name__ == "__main__":
+    MainMenu()
+    exit()
+
     caching_solver = CachingAlphaBetaBot(max_depth=14)
-    deep_caching_solver = CachingAlphaBetaBot(max_depth=18, cache_max_size=10**7)
+    deep_caching_solver = CachingAlphaBetaBot(max_depth=16, cache_max_size=2*10**6)
     # Game()
     # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)

@@ -4,6 +4,7 @@ import enum
 from abc import abstractmethod
 from random import randint
 from time import time_ns
+from functools import lru_cache
 
 
 #############################################################
@@ -370,21 +371,22 @@ class BaseGame:
             for i in range(1, self.n_connect):
                 r = row + i * dr
                 c = col + i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c)):
+                if (0 <= r < self.n_rows and 0 <= c < self.n_cols
+                        and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c))):
                     count += 1
                 else:
                     break
             for i in range(1, self.n_connect):
                 r = row - i * dr
                 c = col - i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c)):
+                if (0 <= r < self.n_rows and 0 <= c < self.n_cols
+                        and self.player_masked_board_ids[player] & (1 << (r * self.n_cols + c))):
                     count += 1
                 else:
                     break
             if count >= self.n_connect:
                 return True
         return False
-
 
     def _check_draw(self) -> bool:
         """ Check if the game has ended in a draw. """
@@ -490,44 +492,6 @@ class Game(BaseGame):
         self.gui.disable_board()
 
 
-class BotSimulationGame(BaseGame):
-    """ A modified version of the game that allows for simulating
-        moves without affecting the actual game state. """
-
-    def _next_turn(self) -> TurnResult.OK:
-        """ Internal method to handle updating the turn to the next player.
-            Is called after every valid move.
-
-        Returns:
-            TurnResult.OK: The result of the turn (the turn was successful, no win or draw).
-        """
-
-        self.player_turn = self.player_turn % self.n_players + 1
-        return TurnResult.OK
-
-    def game_win(self, player: int) -> TurnResult.WIN:
-        self._next_turn()
-        return TurnResult.WIN
-
-    def game_draw(self) -> TurnResult.DRAW:
-        self._next_turn()
-        return TurnResult.DRAW
-
-    def undo_turn(self, col: int) -> None:
-        """ Unplace the tile in the given column and update the game state.
-
-        Args:
-            col (int): The column to unplace the tile in.
-        """
-
-        row = self.n_rows - self.heights[col]
-        self.heights[col] -= 1
-        self.total_moves -= 1
-        self.player_turn = self.player_turn - 1 if self.player_turn > 1 else self.n_players
-        self.board_id -= self.player_turn * self.position_multipliers[row][col]
-        self.player_masked_board_ids[self.player_turn] -= 1 << (row * self.n_cols + col)
-
-
 #############################################################
 #                    BOT IMPLEMENTATIONS                    #
 #############################################################
@@ -560,119 +524,12 @@ class RandomBot(Bot):
         while not game.place(randint(0, game.n_cols - 1)):
             pass
 
-
-class AlphaBetaBot(Bot):
-    """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
-        This bot is able to play in games with more than 2 players. """
-
-    def __init__(self, max_depth: int = -1, initial_alpha: Num = -float('inf'),
-                 initial_beta: Num = float('inf')):
-        """ Initialize the bot.
-
-        Args:
-            max_depth (int, optional): The maximum depth of the search tree to explore.
-                    Defaults to -1 for no limit.
-            default_alpha (Num, optional): The initial value of alpha for alpha-beta pruning.
-                    Defaults to -inf. Use -1 for a weak solver.
-            default_beta (Num, optional): The initial value of beta for alpha-beta pruning.
-                    Defaults to inf. Use 1 for a weak solver.
-        """
-
-        self.max_depth = max_depth
-        self.initial_alpha = initial_alpha
-        self.initial_beta = initial_beta
-
-    def _make_move(self, game: BaseGame) -> None:
-        test_game = BotSimulationGame(game.n_cols, game.n_rows, game.n_connect, game.n_players,
-                                      (game.board_id, game.heights, game.player_turn))
-        _, _, col = self.explore(test_game, self.max_depth)
-        assert col != -1
-        del test_game
-        game.place(col)
-
-    def explore(self, simulation: 'BotSimulationGame', depth: int,
-                alpha: tp.Optional[Num] = None,
-                beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int, int]:
-        """ Recursively explore the game tree using the Alpha-Beta Pruning
-            modified Minimax algorithm.
-
-        Args:
-            simulation (BotSimulationGame): An instance of the game to explore.
-            depth (int): The depth of the search tree to explore.
-            alpha (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
-                    Defaults to None for the default value of DEFAULT_ALPHA.
-            beta (tp.Optional[Num], optional): Internal parameter for alpha-beta pruning.
-                    Defaults to None for the default value of DEFAULT_BETA.
-
-        Returns:
-            tp.Tuple[Num, int, int]: The absolute value of the score of the best move found,
-                    the player id that is expected to win (has the returned score) or 0 if a draw
-                    is expected or the search was cut off, and the column of the move.
-        """
-
-        if alpha is None or beta is None:
-            alpha = self.initial_alpha
-            beta = self.initial_beta
-        assert alpha < beta
-
-        if depth == 0:
-            return 0, 0, -1
-
-        current_turn = simulation.player_turn
-
-        score_if_win = simulation.n_cols * simulation.n_rows - simulation.total_moves
-        for col in range(simulation.n_cols):
-            outcome = simulation.place(col)
-            if outcome == TurnResult.INVALID:
-                continue
-            simulation.undo_turn(col)
-            simulation.player_turn = current_turn
-            if outcome == TurnResult.WIN:
-                # The game is won by this move
-                return score_if_win, current_turn, col
-            elif outcome == TurnResult.DRAW:
-                # If a move immediately leads to a draw, it has to be the only possible move
-                return 0, 0, col
-
-        best_possible_score = score_if_win - simulation.n_players
-        if best_possible_score < beta:
-            beta = best_possible_score # No need to search for moves with impossibly high scores
-            if alpha >= beta:
-                # The search window is empty, prune the search
-                return beta, 0, -1
-
-        best_score, best_player, best_col = -float('inf'), 0, -1
-        for offset in range((simulation.n_cols + 1) // 2):
-            left = (simulation.n_cols - 1) // 2 - offset
-            right = (simulation.n_cols + 1) // 2 + offset
-            for col in ([left, right] if right < simulation.n_cols else [left]):
-                outcome = simulation.place(col)
-                if outcome == TurnResult.INVALID:
-                    continue
-                assert outcome == TurnResult.OK
-                score, player, _ = self.explore(simulation, depth - 1, -beta, -alpha)
-                if player != current_turn:
-                    score = -score
-                simulation.undo_turn(col)
-                simulation.player_turn = current_turn
-                if score > best_score:
-                    best_score, best_player, best_col = score, player, col
-                alpha = max(alpha, score)
-                if score >= beta:
-                    # Found a move better than the highest score we are looking for
-                    return abs(score), player, col
-                if alpha >= beta:
-                    # The search window is empty
-                    assert False # Should never happen, we should have returned already
-        return abs(best_score), best_player, best_col
-
-
 class CachingAlphaBetaBot(Bot):
     """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
         This bot is able to play in games with more than 2 players. It caches some of the
         results of the search to speed up the computation. """
 
-    def __init__(self, max_depth: int = -1, cache_min_depth: int = 0,
+    def __init__(self, max_depth: int = -1, cache_max_size: int = 10**6,
                  initial_alpha: Num = -float('inf'), initial_beta: Num = float('inf')):
         """ Create a new bot instance.
 
@@ -690,7 +547,7 @@ class CachingAlphaBetaBot(Bot):
         self.max_depth = max_depth
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
-        self.cache_min_depth = cache_min_depth
+        self._explore = lru_cache(maxsize=cache_max_size)(self._explore_unwrapped)
 
     def init_from_game(self, game: BaseGame) -> None:
         """ Initialize the bot from a game instance.
@@ -706,17 +563,21 @@ class CachingAlphaBetaBot(Bot):
         self.n_players = game.n_players
         self.n_cols = game.n_cols
         self.n_rows = game.n_rows
+        self._explore.cache_clear()
 
     def make_move(self, game: BaseGame) -> None:
         super().make_move(game)
-        # print("Cache size:", sum(len(cache) for cache in self.cache))
+        print("Cache info:", self._explore.cache_info())
 
     def _make_move(self, game: BaseGame) -> None:
         self.heights = game.heights
         self.player_turn = game.player_turn
         self.total_moves = game.total_moves
         self.player_masked_board_ids = game.player_masked_board_ids
-        _, _, col = self._explore(game.board_id, self.max_depth)
+
+        remaining_depth = min(self.max_depth, game.n_cols * game.n_rows - game.total_moves)
+        _, _, col = self._explore(game.board_id, remaining_depth)
+
         del self.heights, self.player_turn, self.total_moves, self.player_masked_board_ids
         assert col != -1
         game.place(col)
@@ -755,7 +616,7 @@ class CachingAlphaBetaBot(Bot):
 
         masked_board_id = self.player_masked_board_ids[player]
 
-        # TODO: Optimize this
+        # TODO: Optimize this - profiling shows that this is the most time-consuming function
 
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
@@ -763,14 +624,16 @@ class CachingAlphaBetaBot(Bot):
             for i in range(1, self.n_connect):
                 r = row + i * dr
                 c = col + i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and masked_board_id & (1 << (r * self.n_cols + c)):
+                if (0 <= r < self.n_rows and 0 <= c < self.n_cols
+                        and masked_board_id & (1 << (r * self.n_cols + c))):
                     count += 1
                 else:
                     break
             for i in range(1, self.n_connect):
                 r = row - i * dr
                 c = col - i * dc
-                if 0 <= r < self.n_rows and 0 <= c < self.n_cols and masked_board_id & (1 << (r * self.n_cols + c)):
+                if (0 <= r < self.n_rows and 0 <= c < self.n_cols
+                        and masked_board_id & (1 << (r * self.n_cols + c))):
                     count += 1
                 else:
                     break
@@ -778,7 +641,7 @@ class CachingAlphaBetaBot(Bot):
                 return True
         return False
 
-    def _explore(self, board_id: int, remaining_depth: int,
+    def _explore_unwrapped(self, board_id: int, remaining_depth: int,
                 alpha: tp.Optional[Num] = None,
                 beta: tp.Optional[Num] = None) -> tp.Tuple[Num, int, int]:
         """ Recursively explore the game tree using the Alpha-Beta Pruning
@@ -808,11 +671,7 @@ class CachingAlphaBetaBot(Bot):
         elif remaining_depth == -1:
             remaining_depth = 0 # So it will be -1 again in the nested calls (for proper caching)
 
-        # simulation: 'BotSimulationGame' = self.simulation
-
         turn_idx = self.total_moves
-        # if board_id in self.cache[turn_idx]:
-        #     return self.cache[turn_idx][board_id]
 
         n_rows = self.n_rows
         n_cols = self.n_cols
@@ -864,9 +723,6 @@ class CachingAlphaBetaBot(Bot):
                 if alpha >= beta:
                     # The search window is empty
                     assert False # Should never happen, we should have returned already
-        # if remaining_depth >= self.cache_min_depth:
-            # # Cache the result
-            # self.cache[turn_idx][board_id] = abs(best_score), best_player, best_col
         return abs(best_score), best_player, best_col
 
 
@@ -876,16 +732,13 @@ class CachingAlphaBetaBot(Bot):
 
 
 if __name__ == "__main__":
-    strong_solver = AlphaBetaBot(max_depth=11)
-    deep_strong_solver = AlphaBetaBot(max_depth=13)
-    weak_solver = AlphaBetaBot(max_depth=11, initial_alpha=-1, initial_beta=1)
-    deep_weak_solver = AlphaBetaBot(max_depth=13, initial_alpha=-1, initial_beta=1)
-    caching_solver = CachingAlphaBetaBot(max_depth=11, cache_min_depth=0)
-    deep_caching_solver = CachingAlphaBetaBot(max_depth=13, cache_min_depth=0)
+    caching_solver = CachingAlphaBetaBot(max_depth=14)
+    deep_caching_solver = CachingAlphaBetaBot(max_depth=18, cache_max_size=10**7)
     # Game()
     # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
     # Game(bots={1:strong_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
-    Game(bots={2:deep_caching_solver}, n_connect=4, n_players=2)
+    Game(bots={1:caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
+    Game(bots={2:caching_solver, 1:deep_caching_solver}, n_connect=4, n_players=2)
     # Game(bots={1:deep_caching_solver, 2:strong_solver, 3:RandomBot()}, n_connect=4, n_players=3)
     # Game(n_players=3, n_connect=3)

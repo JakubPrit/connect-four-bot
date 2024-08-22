@@ -37,6 +37,7 @@ class GUI:
     WIN_TEXT = "Player {} won!"
     DRAW_TEXT = "It's a draw!"
     TURN_TEXT = "Player {}'s turn"
+    BOT_TURN_TEXT = "Player {}'s (BOT) turn"
 
     DEFAULT_PLAYER_COLORS = ["red", "yellow", "blue", "green", "purple",
                              "cyan", "lime", "magenta", "olive"]
@@ -231,7 +232,13 @@ class MainMenu:
         "n_players": "Number of players",
         "dark_mode": "Dark mode",
     }
+    PLAYER_TEXT = "Player"
+    ASSIGNED_BOT_TEXT = "Assigned bot:"
     START_GAME_TEXT = "PLAY"
+    BOT_EXPLANATION_TEXT = "The strong solver " \
+                           "prioritizes faster wins (or slower losses) The number " \
+                           "after the bot name is the maximum depth of the search tree (higher " \
+                           "is better but slower)."
 
     # value = (min, default, max)
     GENERAL_SETTINGS = {
@@ -241,6 +248,9 @@ class MainMenu:
         "n_cols": (2, 7, 10),
     }
 
+    INFINITY = 999
+    MAX_PLAYERS = GENERAL_SETTINGS["n_players"][2]
+
     BG_COLOR = "#909090"
     LABEL_FONT = "TkDefaultFont 40 bold"
     SETTINGS_FONT = "TkDefaultFont 10"
@@ -248,8 +258,6 @@ class MainMenu:
     GAME_START_FONT = "TkDefaultFont 20 bold"
     RED = "red"
     YELLOW = "yellow"
-
-    INFINITY = 999
 
     WINDOW_WIDTH = 600
     WINDOW_HEIGHT = 600
@@ -296,6 +304,7 @@ class MainMenu:
         self.dark_mode_var = tk.BooleanVar(value=False)
         self.currently_selected_player = tk.StringVar()
         self.currently_selected_bot = tk.StringVar()
+        self.assigned_bots: tp.Dict[int, tp.Optional['Bot']] = {}
 
         ## Styles
         self.scale_style = ttk.Style()
@@ -342,7 +351,8 @@ class MainMenu:
         row = settings_header_rows
         tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.GENERAL_SETTINGS_LABEL_TEXT
-                 ).grid(row=row, column=0, columnspan=MainMenu.INFINITY, sticky="nsew")
+                 ).grid(row=row, column=0, columnspan=MainMenu.SETTINGS_GROUP1_COLS,
+                        sticky="nsew")
         row += 1
         for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
             tk.Label(self.settings_frame, anchor="w", text=MainMenu.SETTINGS_TEXTS[key],
@@ -377,35 +387,52 @@ class MainMenu:
                  ).grid(row=row, column=0, sticky="nsew")
         ttk.Checkbutton(self.settings_frame, variable=self.dark_mode_var
                         ).grid(row=row, column=1, sticky="nsew")
+        row += 1
         group1_rows = row - settings_header_rows
-
-        ## Separator between general, ui and bot settings
-        ttk.Separator(self.settings_frame, orient="vertical"
-                      ).grid(row=settings_header_rows, column=MainMenu.SETTINGS_GROUP1_COLS,
-                             rowspan=MainMenu.INFINITY, sticky="ns")
 
         ## Bots
         row = settings_header_rows
         start_col = MainMenu.SETTINGS_GROUP1_COLS + 1
         tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.BOT_SETTINGS_LABEL_TEXT
-                 ).grid(row=row, column=start_col, columnspan=MainMenu.INFINITY, sticky="nsew")
+                 ).grid(row=row, column=start_col, columnspan=MainMenu.SETTINGS_GROUP2_COLS,
+                        sticky="nsew")
         row += 1
-        tk.Label(self.settings_frame, anchor="w", text="Player", font=MainMenu.SETTINGS_FONT,
-                 bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
+        tk.Label(self.settings_frame, anchor="w", text=MainMenu.PLAYER_TEXT,
+                 font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
                  ).grid(row=row, column=start_col, sticky="nsew")
-        self.player_selector = tk.OptionMenu(self.settings_frame, self.currently_selected_player,
-                                             *range(1, 10))
+        self.player_selector = ttk.OptionMenu(self.settings_frame, self.currently_selected_player,
+                                              *range(1, MainMenu.MAX_PLAYERS + 1))
         self.player_selector.grid(row=row, column=start_col + 1, sticky="nsew")
         row += 1
-        self.bot_selector = tk.OptionMenu(self.settings_frame, self.currently_selected_bot,
-                                          "default", "other1", "other2")
-        self.bot_selector.grid(row=row, column=start_col, columnspan=2, sticky="nsew")
+        tk.Label(self.settings_frame, anchor="w", text=MainMenu.ASSIGNED_BOT_TEXT,
+                 font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
+                 ).grid(row=row, column=start_col, columnspan=MainMenu.SETTINGS_GROUP2_COLS,
+                        sticky="nsew")
+        row += 1
+        self.bot_selector = ttk.OptionMenu(self.settings_frame, self.currently_selected_bot,
+                                           list(BOT_OPTIONS.keys())[0], *BOT_OPTIONS.keys(),
+                                           command=self._handle_bot_assigment)
+        self.bot_selector.grid(row=row, column=start_col, sticky="nsew",
+                               columnspan=MainMenu.SETTINGS_GROUP2_COLS)
+        row += 1
+        tk.Label(self.settings_frame, anchor="w", text=MainMenu.BOT_EXPLANATION_TEXT,
+                    font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.RED,
+                    wraplength=400 * MainMenu.SETTINGS_REL_WIDTH, justify="left"
+                    ).grid(row=row, column=start_col, columnspan=MainMenu.SETTINGS_GROUP2_COLS,
+                            sticky="nsew")
+        group2_rows = row - settings_header_rows
 
-        # ## Separator between settings and start game button
-        # ttk.Separator(self.settings_frame, orient="horizontal"
-        #               ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
-        #                      sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
+        ## Separator between general, ui and bot settings
+        ttk.Separator(self.settings_frame, orient="vertical"
+                      ).grid(row=settings_header_rows, column=MainMenu.SETTINGS_GROUP1_COLS,
+                             rowspan=max(group1_rows, group2_rows), sticky="ns")
+
+        ## Separator between settings and start game button
+        row = settings_header_rows + max(group1_rows, group2_rows)
+        ttk.Separator(self.settings_frame, orient="horizontal"
+                      ).grid(row=row, column=0, columnspan=MainMenu.INFINITY,
+                             sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
 
         # Start button
         tk.Button(self.root, text=MainMenu.START_GAME_TEXT, font=MainMenu.GAME_START_FONT,
@@ -425,7 +452,9 @@ class MainMenu:
             for key, val in GUI.DARK_MODE.items():
                 settings[key] = val
         self.root.destroy()
-        Game(window_title=title, **settings) # type: ignore
+        bots = {player: bot for player, bot in self.assigned_bots.items()
+                if bot is not None}
+        Game(window_title=title, bots=bots, **settings) # type: ignore
 
     def _handle_scale(self, val, key):
         int_val = int(float(val))
@@ -439,6 +468,10 @@ class MainMenu:
             self.settings_var["n_connect"].set(min(n_connect, max(n_rows, n_cols)))
             self.settings_scale["n_connect"].config(to=max(n_rows, n_cols))
             self.title_label_num.config(text=str(min(n_connect, max(n_rows, n_cols))))
+
+    def _handle_bot_assigment(self, bot_name):
+        player = int(self.currently_selected_player.get())
+        self.assigned_bots[player] = BOT_OPTIONS[bot_name]
 
 
 #############################################################
@@ -697,7 +730,11 @@ class Game(BaseGame):
         return TurnResult.OK
 
     def _update_turn_label(self) -> None:
-        self.gui.set_state_label(GUI.TURN_TEXT.format(self.player_turn), self.player_turn)
+        if self.player_turn not in self.bots:
+            text = GUI.TURN_TEXT.format(self.player_turn)
+        else:
+            text = GUI.BOT_TURN_TEXT.format(self.player_turn)
+        self.gui.set_state_label(text, self.player_turn)
 
     def game_win(self, player: int) -> TurnResult.WIN:
         """ Handle the game being won by a player.
@@ -765,17 +802,17 @@ class RandomBot(Bot):
 class CachingAlphaBetaBot(Bot):
     """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
         This bot is able to play in games with more than 2 players. It caches some of the
-        results of the search to speed up the computation. """
+        results of the search to speed up the computation using a least-recently-used cache. """
 
-    def __init__(self, max_depth: int = -1, cache_max_size: int = 10**6,
+    def __init__(self, max_depth: int = -1, cache_max_size: int = 5 * 10**6,
                  initial_alpha: Num = -float("inf"), initial_beta: Num = float("inf")):
         """ Create a new bot instance.
 
             Args:
                 max_depth (int, optional): The maximum depth of the search tree to explore.
                         Defaults to -1 for no limit.
-                cache_min_depth (int, optional): The minimum depth of the search tree to cache results.
-                        Defaults to 0 for caching all results.
+                cache_max_size (int, optional): The maximum number of results to cache.
+                        Defaults to 5 million. Uses a least-recently-used cache.
                 default_alpha (Num, optional): The initial value of alpha for alpha-beta pruning.
                         Defaults to -inf. Use -1 for a weak solver.
                 default_beta (Num, optional): The initial value of beta for alpha-beta pruning.
@@ -959,6 +996,27 @@ class CachingAlphaBetaBot(Bot):
         return abs(best_score), best_player, best_col
 
 
+BOT_OPTIONS = {
+    "none (real player)": None,
+    "random placer": RandomBot(),
+    "strong solver 13": CachingAlphaBetaBot(max_depth=13),
+    "strong solver 15": CachingAlphaBetaBot(max_depth=15),
+    "strong solver 16": CachingAlphaBetaBot(max_depth=16),
+    "strong solver 17": CachingAlphaBetaBot(max_depth=17),
+    "strong solver 18": CachingAlphaBetaBot(max_depth=18),
+    "strong solver 19": CachingAlphaBetaBot(max_depth=19),
+    "strong solver unlimited": CachingAlphaBetaBot(max_depth=-1),
+    "weak solver 13": CachingAlphaBetaBot(max_depth=13, initial_alpha=-1, initial_beta=1),
+    "weak solver 15": CachingAlphaBetaBot(max_depth=15, initial_alpha=-1, initial_beta=1),
+    "weak solver 17": CachingAlphaBetaBot(max_depth=17, initial_alpha=-1, initial_beta=1),
+    "weak solver 18": CachingAlphaBetaBot(max_depth=18, initial_alpha=-1, initial_beta=1),
+    "weak solver 19": CachingAlphaBetaBot(max_depth=19, initial_alpha=-1, initial_beta=1),
+    "weak solver 20": CachingAlphaBetaBot(max_depth=20, initial_alpha=-1, initial_beta=1),
+    "weak solver 21": CachingAlphaBetaBot(max_depth=21, initial_alpha=-1, initial_beta=1),
+    "weak solver unlimited": CachingAlphaBetaBot(max_depth=-1, initial_alpha=-1, initial_beta=1),
+}
+
+
 #############################################################
 #                          TESTING                          #
 #############################################################
@@ -966,15 +1024,3 @@ class CachingAlphaBetaBot(Bot):
 
 if __name__ == "__main__":
     MainMenu()
-    exit()
-
-    caching_solver = CachingAlphaBetaBot(max_depth=14)
-    deep_caching_solver = CachingAlphaBetaBot(max_depth=16, cache_max_size=2*10**6)
-    # Game()
-    # Game(bots={1:RandomBot(), 2:RandomBot()}, n_connect=4, n_players=2)
-    # Game(bots={1:strong_solver, 2:strong_solver}, n_connect=4, n_players=2)
-    # Game(bots={1:strong_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
-    Game(bots={1:caching_solver, 2:deep_caching_solver}, n_connect=4, n_players=2)
-    Game(bots={2:caching_solver, 1:deep_caching_solver}, n_connect=4, n_players=2)
-    # Game(bots={1:deep_caching_solver, 2:strong_solver, 3:RandomBot()}, n_connect=4, n_players=3)
-    # Game(n_players=3, n_connect=3)

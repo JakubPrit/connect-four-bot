@@ -38,8 +38,8 @@ class GUI:
     DRAW_TEXT = "It's a draw!"
     TURN_TEXT = "Player {}'s turn"
 
-    DEFAULT_PLAYER_COLORS = ['red', 'yellow', 'blue', 'green', 'purple',
-                             'cyan', 'lime', 'magenta', 'olive']
+    DEFAULT_PLAYER_COLORS = ["red", "yellow", "blue", "green", "purple",
+                             "cyan", "lime", "magenta", "olive"]
     LABEL_FONT = "TkDefaultFont 20 bold"
 
     BOARD_TOP_EXTRA_MARGIN = 0.1
@@ -52,14 +52,14 @@ class GUI:
     MIN_WINDOW_HEIGHT = 350
 
     DARK_MODE = {
-        'tile_bg_color': "#303030",
-        'outline_color': "black",
-        'window_bg_color': "#303030",
-        'draw_color': "white",
-        'no_player_color': "#484848",
+        "tile_bg_color": "#303030",
+        "outline_color": "black",
+        "window_bg_color": "#303030",
+        "draw_color": "white",
+        "no_player_color": "#484848",
     }
 
-    def __init__(self, game: 'Game', tile_size: int = 100, tile_bg_color: str = "#909090",
+    def __init__(self, game: "Game", tile_size: int = 100, tile_bg_color: str = "#909090",
                  outline_color: str = "white", window_bg_color: str = "#909090",
                  player_colors: tp.Optional[tp.List[str]] = None, draw_color: str = "black",
                  no_player_color: str = "#b7b7b7", window_title: str = "Connect 4"):
@@ -222,19 +222,20 @@ class MainMenu:
     CONNECT_TEXT = "Connect"
     SETTINGS_LABEL_TEXT = "Settings"
     SETTINGS_TEXTS = {
-        'n_cols': "Number of columns",
-        'n_rows': "Number of rows",
-        'n_connect': "Number of tiles to connect",
-        'n_players': "Number of players",
+        "n_cols": "Number of columns",
+        "n_rows": "Number of rows",
+        "n_connect": "Number of tiles to connect",
+        "n_players": "Number of players",
+        "dark_mode": "Dark mode",
     }
     START_GAME_TEXT = "PLAY"
 
     # value = (min, default, max)
     GENERAL_SETTINGS = {
-        'n_connect': (2, 4, 10),
-        'n_players': (2, 2, 9),
-        'n_rows': (2, 6, 10),
-        'n_cols': (2, 7, 10),
+        "n_players": (2, 2, 9),
+        "n_connect": (2, 4, 10),
+        "n_rows": (2, 6, 10),
+        "n_cols": (2, 7, 10),
     }
 
     BG_COLOR = "#909090"
@@ -242,8 +243,10 @@ class MainMenu:
     SETTINGS_FONT = "TkDefaultFont 10"
     SETTINGS_FONT_BOLD = "TkDefaultFont 10 bold"
     GAME_START_FONT = "TkDefaultFont 20 bold"
-    RED = 'red'
-    YELLOW = 'yellow'
+    RED = "red"
+    YELLOW = "yellow"
+
+    INFINITY = 999
 
     WINDOW_WIDTH = 600
     WINDOW_HEIGHT = 600
@@ -255,10 +258,11 @@ class MainMenu:
     SETTINGS_TOP_REL_Y = 0.3
     SETTINGS_BOTTOM_REL_Y = 0.75
     SETTINGS_REL_WIDTH = 0.7
-    SETTINGS_BORDERS = 10
+    SETTINGS_PAD_X = 15
     START_GAME_REL_Y = 0.85
     GAME_START_REL_WIDTH = 0.3
     GAME_START_REL_HEIGHT = 0.1
+    HORIZONTAL_SEP_PAD_Y = 10
 
     def __init__(self):
         # Root window widget
@@ -268,34 +272,29 @@ class MainMenu:
         self.root.minsize(MainMenu.MIN_WINDOW_WIDTH, MainMenu.MIN_WINDOW_HEIGHT)
         self.root.config(bg=MainMenu.BG_COLOR)
 
-
         # Title label
         self.title_frame = tk.Frame(self.root)
-        self.title_frame.pack(fill="both", expand=True)
         self.title_frame.config(bg=MainMenu.BG_COLOR)
         self.title_frame.place(anchor="center", relx=0.5, rely=MainMenu.TITLE_REL_Y)
-        self.title_label_1 = tk.Label(self.title_frame, text=MainMenu.CONNECT_TEXT + " ",
-                                      font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
-                                      fg=MainMenu.YELLOW)
-        self.title_label_2 = tk.Label(self.title_frame, text="4",
-                                      font=MainMenu.LABEL_FONT, bg=MainMenu.BG_COLOR,
-                                      fg=MainMenu.RED)
-        self.title_label_1.pack(side="left")
-        self.title_label_2.pack(side="left")
-
-
-        # Separator between title and settings
-        self.title_settings_separator = ttk.Separator(self.root, orient="horizontal")
-        self.title_settings_separator.place(relx=(1 - MainMenu.TITLE_SETTINGS_SEP_REL_WIDTH) / 2,
-                                            rely=MainMenu.TITLE_SETTINGS_SEP_REL_Y,
-                                            relwidth=MainMenu.TITLE_SETTINGS_SEP_REL_WIDTH)
-
+        tk.Label(self.title_frame, text=MainMenu.CONNECT_TEXT + " ", font=MainMenu.LABEL_FONT,
+                 bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW).pack(side="left")
+        self.title_label_num = tk.Label(self.title_frame, text="4", font=MainMenu.LABEL_FONT,
+                                        bg=MainMenu.BG_COLOR, fg=MainMenu.RED)
+        self.title_label_num.pack(side="left")
 
         # Settings
-        self.settings_labels = {}
+        ## Variables
         self.settings_scale = {}
         self.settings_var: tp.Dict[str, tp.Any] = {}
-        self.settings_val_label = {}
+        for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
+            self.settings_var[key] = tk.IntVar(value=default_val)
+        self.dark_mode_var = tk.BooleanVar(value=False)
+
+        ## Styles
+        self.scale_style = ttk.Style()
+        self.scale_style.configure("TScale", background=MainMenu.BG_COLOR)
+        self.toggle_style = ttk.Style()
+        self.toggle_style.configure("TCheckbutton", background=MainMenu.BG_COLOR)
 
         ## Frame
         self.settings_frame = tk.Frame(self.root)
@@ -306,68 +305,71 @@ class MainMenu:
                                   relx=(1 - MainMenu.SETTINGS_REL_WIDTH) / 2,
                                   relwidth=MainMenu.SETTINGS_REL_WIDTH,
                                   relheight=settings_rel_height)
-        self.settings_frame.grid_columnconfigure(0, weight=1)
-        self.settings_frame.grid_columnconfigure(1, weight=5)
-        self.settings_frame.grid_columnconfigure(2, weight=0)
+        self.settings_frame.grid_columnconfigure(0, weight=1, pad=MainMenu.SETTINGS_PAD_X)
+        self.settings_frame.grid_columnconfigure(1, weight=5, pad=MainMenu.SETTINGS_PAD_X)
+        self.settings_frame.grid_columnconfigure(2, weight=0, pad=MainMenu.SETTINGS_PAD_X)
+        self.settings_frame.grid_columnconfigure(3, weight=0, pad=MainMenu.SETTINGS_PAD_X)
+        self.settings_frame.grid_columnconfigure(4, weight=2, pad=MainMenu.SETTINGS_PAD_X)
+        self.settings_frame.grid_columnconfigure(5, weight=0, pad=MainMenu.SETTINGS_PAD_X)
+
+        settings_header_rows = 0
+
+        ## Separator between title and settings
+        ttk.Separator(self.settings_frame, orient="horizontal"
+                      ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
+                             sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
+        settings_header_rows += 1
 
         ## Label
-        self.settings_label = tk.Label(self.settings_frame, text=MainMenu.SETTINGS_LABEL_TEXT,
-                                       font=MainMenu.SETTINGS_FONT_BOLD, bg=MainMenu.BG_COLOR,
-                                       fg=MainMenu.RED, anchor="w")
-        self.settings_label.grid(row=0, column=0, sticky="nsew")
+        tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="center", bg=MainMenu.BG_COLOR,
+                 font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.SETTINGS_LABEL_TEXT
+                 ).grid(row=settings_header_rows, column=0,
+                        columnspan=MainMenu.INFINITY, sticky="nsew")
+        settings_header_rows += 1
 
-        ## General Inputs
-        self.scale_style = ttk.Style()
-        self.scale_style.configure('TScale', background=MainMenu.BG_COLOR)
+        ## General Settings
+        row = settings_header_rows
         for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
-            self.settings_var[key] = tk.IntVar(value=default_val)
-        for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
-            self.settings_labels[key] = tk.Label(self.settings_frame, anchor="w",
-                                                text=MainMenu.SETTINGS_TEXTS[key],
-                                                font=MainMenu.SETTINGS_FONT,
-                                                bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW,
-                                                border=MainMenu.SETTINGS_BORDERS)
-            self.settings_labels[key].grid(row=len(self.settings_labels), column=0, sticky="nsew")
+            tk.Label(self.settings_frame, anchor="w", text=MainMenu.SETTINGS_TEXTS[key],
+                     font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
+                     ).grid(row=row, column=0, sticky="nsew")
             self.settings_scale[key] = ttk.Scale(self.settings_frame, from_=min_val, to=max_val,
                                                  orient="horizontal",
                                                  variable=self.settings_var[key],
                                                  command=(lambda val, key=key: # type: ignore
                                                           self._handle_scale(val, key)),
-                                                 style='TScale')
+                                                 style="TScale")
             self.settings_scale[key].set(default_val)
-            self.settings_scale[key].grid(row=len(self.settings_scale), column=1, sticky="nsew")
-            self.settings_val_label[key] = tk.Label(self.settings_frame, anchor="center",
-                                                   textvariable=self.settings_var[key],
-                                                   font=MainMenu.SETTINGS_FONT_BOLD,
-                                                   bg=MainMenu.BG_COLOR, fg=MainMenu.RED,
-                                                   border=MainMenu.SETTINGS_BORDERS)
-            self.settings_val_label[key].grid(row=len(self.settings_val_label), column=2,
-                                              sticky="nsew")
+            self.settings_scale[key].grid(row=row, column=1, sticky="nsew")
+            tk.Label(self.settings_frame, anchor="center", textvariable=self.settings_var[key],
+                     font=MainMenu.SETTINGS_FONT_BOLD, bg=MainMenu.BG_COLOR, fg=MainMenu.RED
+                     ).grid(row=row, column=2, sticky="nsew")
+            row += 1
+        general_settings_rows = row - settings_header_rows
 
         ## Light / Dark mode
-        self.toggle_style = ttk.Style()
-        self.toggle_style.configure('TCheckbutton', background=MainMenu.BG_COLOR)
-        self.dark_mode_var = tk.BooleanVar(value=False)
-        self.dark_mode_label = tk.Label(self.settings_frame, anchor="w",
-                                        text="Dark mode",
-                                        font=MainMenu.SETTINGS_FONT,
-                                        bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW,
-                                        border=MainMenu.SETTINGS_BORDERS)
-        self.dark_mode_label.grid(row=len(MainMenu.GENERAL_SETTINGS)+1, column=0, sticky="nsew")
-        self.dark_mode_toggle = ttk.Checkbutton(self.settings_frame, variable=self.dark_mode_var,)
-                                                # command=self._toggle_dark_mode)
-        self.dark_mode_toggle.grid(row=len(MainMenu.GENERAL_SETTINGS)+1, column=1, sticky="nsew")
+        row = settings_header_rows + general_settings_rows
+        tk.Label(self.settings_frame, anchor="w", text="dark_mode", font=MainMenu.SETTINGS_FONT,
+                 bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW).grid(row=row, column=0, sticky="nsew")
+        ttk.Checkbutton(self.settings_frame, variable=self.dark_mode_var
+                        ).grid(row=row, column=1, sticky="nsew")
 
+        ## Separator between general, ui and bot settings
+        ttk.Separator(self.settings_frame, orient="vertical"
+                      ).grid(row=2, column=3, rowspan=999, sticky="ns")
+
+        ## Bots
+        self.currently_selected_bot = tk.StringVar()
+        self.bot_selector = tk.OptionMenu(self.settings_frame, self.currently_selected_bot,
+                                          "default", "other1", "other2")
+        self.bot_selector.grid(row=2, column=4, columnspan=2, sticky="nsew")
 
         # Start button
-        self.start_button = tk.Button(self.root, text=MainMenu.START_GAME_TEXT,
-                                      font=MainMenu.GAME_START_FONT,
-                                      bg=MainMenu.YELLOW, fg=MainMenu.RED,
-                                      command=self._start_game)
-        self.start_button.place(anchor="center", relx=0.5, rely=MainMenu.START_GAME_REL_Y,
-                                relwidth=MainMenu.GAME_START_REL_WIDTH,
-                                relheight=MainMenu.GAME_START_REL_HEIGHT)
-
+        tk.Button(self.root, text=MainMenu.START_GAME_TEXT, font=MainMenu.GAME_START_FONT,
+                  bg=MainMenu.YELLOW, fg=MainMenu.RED, command=self._start_game
+                  ).place(anchor="center", relx=0.5, rely=MainMenu.START_GAME_REL_Y,
+                          relwidth=MainMenu.GAME_START_REL_WIDTH,
+                          relheight=MainMenu.GAME_START_REL_HEIGHT)
 
         # Run the main loop
         self.root.mainloop()
@@ -375,7 +377,7 @@ class MainMenu:
 
     def _start_game(self):
         settings = {key: var.get() for key, var in self.settings_var.items()}
-        title = MainMenu.CONNECT_TEXT + " " + str(settings['n_connect'])
+        title = MainMenu.CONNECT_TEXT + " " + str(settings["n_connect"])
         if self.dark_mode_var.get():
             for key, val in GUI.DARK_MODE.items():
                 settings[key] = val
@@ -385,15 +387,15 @@ class MainMenu:
     def _handle_scale(self, val, key):
         int_val = int(float(val))
         self.settings_var[key].set(int_val)
-        if key == 'n_connect':
-            self.title_label_2.config(text=str(int_val))
-        elif key in ('n_cols', 'n_rows'):
-            n_connect = int(float(self.settings_var['n_connect'].get()))
-            n_rows = int(float(self.settings_var['n_rows'].get()))
-            n_cols = int(float(self.settings_var['n_cols'].get()))
-            self.settings_var['n_connect'].set(min(n_connect, max(n_rows, n_cols)))
-            self.settings_scale['n_connect'].config(to=max(n_rows, n_cols))
-            self.title_label_2.config(text=str(min(n_connect, max(n_rows, n_cols))))
+        if key == "n_connect":
+            self.title_label_num.config(text=str(int_val))
+        elif key in ("n_cols", "n_rows"):
+            n_connect = int(float(self.settings_var["n_connect"].get()))
+            n_rows = int(float(self.settings_var["n_rows"].get()))
+            n_cols = int(float(self.settings_var["n_cols"].get()))
+            self.settings_var["n_connect"].set(min(n_connect, max(n_rows, n_cols)))
+            self.settings_scale["n_connect"].config(to=max(n_rows, n_cols))
+            self.title_label_num.config(text=str(min(n_connect, max(n_rows, n_cols))))
 
 
 #############################################################
@@ -591,7 +593,7 @@ class Game(BaseGame):
     """ The main class for the Connect 4 game. """
 
     def __init__(self, n_cols: int = 7, n_rows: int = 6, n_connect: int = 4, n_players: int = 2,
-                 bots: tp.Dict[int, 'Bot'] = {}, game_state: tp.Optional[GameState] = None,
+                 bots: tp.Dict[int, "Bot"] = {}, game_state: tp.Optional[GameState] = None,
                  **gui_kwargs):
         """ Initialize the game and start the GUI.
 
@@ -723,7 +725,7 @@ class CachingAlphaBetaBot(Bot):
         results of the search to speed up the computation. """
 
     def __init__(self, max_depth: int = -1, cache_max_size: int = 10**6,
-                 initial_alpha: Num = -float('inf'), initial_beta: Num = float('inf')):
+                 initial_alpha: Num = -float("inf"), initial_beta: Num = float("inf")):
         """ Create a new bot instance.
 
             Args:
@@ -892,7 +894,7 @@ class CachingAlphaBetaBot(Bot):
                 # The search window is empty, prune the search
                 return beta, 0, -1
 
-        best_score, best_player, best_col = -float('inf'), 0, -1
+        best_score, best_player, best_col = -float("inf"), 0, -1
         for offset in range((n_cols + 1) // 2):
             left = (n_cols - 1) // 2 - offset
             right = (n_cols + 1) // 2 + offset

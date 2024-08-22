@@ -221,6 +221,9 @@ class MainMenu:
     TITLE_TEXT = "Connect 4 Menu"
     CONNECT_TEXT = "Connect"
     SETTINGS_LABEL_TEXT = "Settings"
+    GENERAL_SETTINGS_LABEL_TEXT = "General settings"
+    UI_SETTINGS_LABEL_TEXT = "UI settings"
+    BOT_SETTINGS_LABEL_TEXT = "Bot settings"
     SETTINGS_TEXTS = {
         "n_cols": "Number of columns",
         "n_rows": "Number of rows",
@@ -263,6 +266,8 @@ class MainMenu:
     GAME_START_REL_WIDTH = 0.3
     GAME_START_REL_HEIGHT = 0.1
     HORIZONTAL_SEP_PAD_Y = 10
+    SETTINGS_GROUP1_COLS = 3
+    SETTINGS_GROUP2_COLS = 2
 
     def __init__(self):
         # Root window widget
@@ -289,6 +294,8 @@ class MainMenu:
         for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
             self.settings_var[key] = tk.IntVar(value=default_val)
         self.dark_mode_var = tk.BooleanVar(value=False)
+        self.currently_selected_player = tk.StringVar()
+        self.currently_selected_bot = tk.StringVar()
 
         ## Styles
         self.scale_style = ttk.Style()
@@ -321,14 +328,22 @@ class MainMenu:
         settings_header_rows += 1
 
         ## Label
-        tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="center", bg=MainMenu.BG_COLOR,
+        tk.Label(self.settings_frame, fg=MainMenu.YELLOW, anchor="center", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.SETTINGS_LABEL_TEXT
                  ).grid(row=settings_header_rows, column=0,
                         columnspan=MainMenu.INFINITY, sticky="nsew")
         settings_header_rows += 1
+        ttk.Separator(self.settings_frame, orient="horizontal"
+                      ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
+                             sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
+        settings_header_rows += 1
 
         ## General Settings
         row = settings_header_rows
+        tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
+                 font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.GENERAL_SETTINGS_LABEL_TEXT
+                 ).grid(row=row, column=0, columnspan=MainMenu.INFINITY, sticky="nsew")
+        row += 1
         for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
             tk.Label(self.settings_frame, anchor="w", text=MainMenu.SETTINGS_TEXTS[key],
                      font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
@@ -349,20 +364,48 @@ class MainMenu:
 
         ## Light / Dark mode
         row = settings_header_rows + general_settings_rows
-        tk.Label(self.settings_frame, anchor="w", text="dark_mode", font=MainMenu.SETTINGS_FONT,
-                 bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW).grid(row=row, column=0, sticky="nsew")
+        ttk.Separator(self.settings_frame, orient="horizontal"
+                      ).grid(row=row, column=0, sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y,
+                             columnspan=MainMenu.SETTINGS_GROUP1_COLS)
+        row += 1
+        tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
+                 font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.UI_SETTINGS_LABEL_TEXT
+                 ).grid(row=row, column=0, columnspan=MainMenu.INFINITY, sticky="nsew")
+        row += 1
+        tk.Label(self.settings_frame, anchor="w", text=MainMenu.SETTINGS_TEXTS["dark_mode"],
+                 font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
+                 ).grid(row=row, column=0, sticky="nsew")
         ttk.Checkbutton(self.settings_frame, variable=self.dark_mode_var
                         ).grid(row=row, column=1, sticky="nsew")
+        group1_rows = row - settings_header_rows
 
         ## Separator between general, ui and bot settings
         ttk.Separator(self.settings_frame, orient="vertical"
-                      ).grid(row=2, column=3, rowspan=999, sticky="ns")
+                      ).grid(row=settings_header_rows, column=MainMenu.SETTINGS_GROUP1_COLS,
+                             rowspan=MainMenu.INFINITY, sticky="ns")
 
         ## Bots
-        self.currently_selected_bot = tk.StringVar()
+        row = settings_header_rows
+        start_col = MainMenu.SETTINGS_GROUP1_COLS + 1
+        tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
+                 font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.BOT_SETTINGS_LABEL_TEXT
+                 ).grid(row=row, column=start_col, columnspan=MainMenu.INFINITY, sticky="nsew")
+        row += 1
+        tk.Label(self.settings_frame, anchor="w", text="Player", font=MainMenu.SETTINGS_FONT,
+                 bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
+                 ).grid(row=row, column=start_col, sticky="nsew")
+        self.player_selector = tk.OptionMenu(self.settings_frame, self.currently_selected_player,
+                                             *range(1, 10))
+        self.player_selector.grid(row=row, column=start_col + 1, sticky="nsew")
+        row += 1
         self.bot_selector = tk.OptionMenu(self.settings_frame, self.currently_selected_bot,
                                           "default", "other1", "other2")
-        self.bot_selector.grid(row=2, column=4, columnspan=2, sticky="nsew")
+        self.bot_selector.grid(row=row, column=start_col, columnspan=2, sticky="nsew")
+
+        # ## Separator between settings and start game button
+        # ttk.Separator(self.settings_frame, orient="horizontal"
+        #               ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
+        #                      sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
 
         # Start button
         tk.Button(self.root, text=MainMenu.START_GAME_TEXT, font=MainMenu.GAME_START_FONT,

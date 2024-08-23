@@ -57,7 +57,7 @@ from the `connect4.py` file and creating an instance of it.
 Alternatively, you can import and instantiate the `Game` class (also from the `connect4.py` file)
 to start a game directly without the main menu. In this case, you can pass the game settings as
 arguments to the constructor according to its docstring. Bots need to be instantiated from the
-corresponding classes 'RandomBot' or 'CachedMinimaxBot' (also in the `connect4.py` file)
+corresponding classes `RandomBot` or `CachedMinimaxBot` (also in the `connect4.py` file)
 and passed as values in the `bots` for the keys corresponding to the player numbers. With this
 method, you can also launch the game with other configurations than the ones allowed
 in the main menu, but bots may be too slow for those configurations.

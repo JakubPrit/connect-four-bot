@@ -4,7 +4,11 @@ import typing as tp
 import enum
 from abc import abstractmethod
 from random import randint
-from time import time_ns
+try:
+    from time import time_ns
+except ImportError:
+    from time import time
+    time_ns = lambda: int(time() * 1e9)
 from functools import lru_cache
 
 
@@ -13,7 +17,6 @@ from functools import lru_cache
 #############################################################
 
 
-Side = tp.Literal[0, 1, 2, 3]
 Num = tp.Union[int, float]
 GameState = tp.Tuple[int, tp.List[int], int]
 

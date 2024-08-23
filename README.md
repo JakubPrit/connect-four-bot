@@ -19,13 +19,16 @@ if you want it to make moves in a reasonable time.
 
 ### Dependencies
 
-The project requires Python 3 to run. It uses tkinter for the GUI, which should be included
-in most Python installations. If you don't have it, you can install it using the following
-command or a similar one depending on your system:
+The project requires Python 3.6.0 or above to run. It uses tkinter for the GUI, which should be
+included in most Python installations. If you don't have it, you can install it using the
+following command or a similar one depending on your system:
 
 ```bash
 sudo apt-get install python-tk
 ```
+
+Running the game was successfully tested on Python 3.6.0, 3.9.13, 3.10.9, and 3.12.5 on Windows 11
+and Python 3.10.12 on Ubuntu 22.04 in WSL.
 
 ### Setup
 

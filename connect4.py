@@ -235,17 +235,18 @@ class MainMenu:
     PLAYER_TEXT = "Player"
     ASSIGNED_BOT_TEXT = "Assigned bot:"
     START_GAME_TEXT = "PLAY"
-    BOT_EXPLANATION_TEXT = "The strong solver " \
-                           "prioritizes faster wins (or slower losses) The number " \
-                           "after the bot name is the maximum depth of the search tree (higher " \
-                           "is better but slower)."
+    BOT_EXPLANATION_TEXT = "Strong solvers can win sooner or lose later.    \n" \
+                           "Weak solvers disregard the length of the game,  \n" \
+                           "but thay may need less time per move.           \n" \
+                           "The numbers are the maximum depths of the       \n" \
+                           "search trees (deeper => better & slower).         "
 
     # value = (min, default, max)
     GENERAL_SETTINGS = {
         "n_players": (2, 2, 9),
-        "n_connect": (2, 4, 10),
-        "n_rows": (2, 6, 10),
-        "n_cols": (2, 7, 10),
+        "n_connect": (3, 4, 10),
+        "n_rows": (3, 6, 10),
+        "n_cols": (3, 7, 10),
     }
 
     INFINITY = 999
@@ -259,14 +260,12 @@ class MainMenu:
     RED = "red"
     YELLOW = "yellow"
 
-    WINDOW_WIDTH = 600
+    WINDOW_WIDTH = 900
     WINDOW_HEIGHT = 600
-    MIN_WINDOW_WIDTH = 450
-    MIN_WINDOW_HEIGHT = 500
-    TITLE_REL_Y = 0.15
-    TITLE_SETTINGS_SEP_REL_Y = 0.25
-    TITLE_SETTINGS_SEP_REL_WIDTH = 0.8
-    SETTINGS_TOP_REL_Y = 0.3
+    MIN_WINDOW_WIDTH = 800
+    MIN_WINDOW_HEIGHT = 550
+    TITLE_REL_Y = 0.12
+    SETTINGS_TOP_REL_Y = 0.2
     SETTINGS_BOTTOM_REL_Y = 0.75
     SETTINGS_REL_WIDTH = 0.7
     SETTINGS_PAD_X = 15
@@ -276,16 +275,16 @@ class MainMenu:
     HORIZONTAL_SEP_PAD_Y = 10
     SETTINGS_GROUP1_COLS = 3
     SETTINGS_GROUP2_COLS = 2
+    SETTINGS_COL_WEIGHTS = [1, 5, 0, 0, 2, 0]
 
-    def __init__(self):
-        # Root window widget
+    def _create_root(self):
         self.root = tk.Tk()
         self.root.title(MainMenu.TITLE_TEXT)
         self.root.geometry("{}x{}".format(MainMenu.WINDOW_WIDTH, MainMenu.WINDOW_HEIGHT))
         self.root.minsize(MainMenu.MIN_WINDOW_WIDTH, MainMenu.MIN_WINDOW_HEIGHT)
         self.root.config(bg=MainMenu.BG_COLOR)
 
-        # Title label
+    def _create_title(self):
         self.title_frame = tk.Frame(self.root)
         self.title_frame.config(bg=MainMenu.BG_COLOR)
         self.title_frame.place(anchor="center", relx=0.5, rely=MainMenu.TITLE_REL_Y)
@@ -295,8 +294,8 @@ class MainMenu:
                                         bg=MainMenu.BG_COLOR, fg=MainMenu.RED)
         self.title_label_num.pack(side="left")
 
-        # Settings
-        ## Variables
+    def _create_settings(self):
+        # Variables
         self.settings_scale = {}
         self.settings_var: tp.Dict[str, tp.Any] = {}
         for key, (min_val, default_val, max_val) in MainMenu.GENERAL_SETTINGS.items():
@@ -306,13 +305,13 @@ class MainMenu:
         self.currently_selected_bot = tk.StringVar()
         self.assigned_bots: tp.Dict[int, tp.Optional['Bot']] = {}
 
-        ## Styles
+        # Styles
         self.scale_style = ttk.Style()
         self.scale_style.configure("TScale", background=MainMenu.BG_COLOR)
         self.toggle_style = ttk.Style()
         self.toggle_style.configure("TCheckbutton", background=MainMenu.BG_COLOR)
 
-        ## Frame
+        # Frame
         self.settings_frame = tk.Frame(self.root)
         self.settings_frame.pack(fill="both", expand=True)
         self.settings_frame.config(bg=MainMenu.BG_COLOR, highlightthickness=0)
@@ -321,34 +320,39 @@ class MainMenu:
                                   relx=(1 - MainMenu.SETTINGS_REL_WIDTH) / 2,
                                   relwidth=MainMenu.SETTINGS_REL_WIDTH,
                                   relheight=settings_rel_height)
-        self.settings_frame.grid_columnconfigure(0, weight=1, pad=MainMenu.SETTINGS_PAD_X)
-        self.settings_frame.grid_columnconfigure(1, weight=5, pad=MainMenu.SETTINGS_PAD_X)
-        self.settings_frame.grid_columnconfigure(2, weight=0, pad=MainMenu.SETTINGS_PAD_X)
-        self.settings_frame.grid_columnconfigure(3, weight=0, pad=MainMenu.SETTINGS_PAD_X)
-        self.settings_frame.grid_columnconfigure(4, weight=2, pad=MainMenu.SETTINGS_PAD_X)
-        self.settings_frame.grid_columnconfigure(5, weight=0, pad=MainMenu.SETTINGS_PAD_X)
+        for i, weight in enumerate(MainMenu.SETTINGS_COL_WEIGHTS):
+            self.settings_frame.grid_columnconfigure(i, weight=weight,
+                                                     pad=MainMenu.SETTINGS_PAD_X)
 
-        settings_header_rows = 0
+        self.settings_header_rows = 0
 
-        ## Separator between title and settings
+        self._create_settings_label()
+        self._create_settings_general()
+        self._create_settings_ui()
+        self._create_settings_bots()
+        self._create_settings_separators()
+
+    def _create_settings_label(self):
+        # Separator between title and settings
         ttk.Separator(self.settings_frame, orient="horizontal"
-                      ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
-                             sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
-        settings_header_rows += 1
+                      ).grid(row=self.settings_header_rows, column=0,
+                             columnspan=MainMenu.INFINITY, sticky="ew",
+                             pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
+        self.settings_header_rows += 1
 
-        ## Label
+        # Label
         tk.Label(self.settings_frame, fg=MainMenu.YELLOW, anchor="center", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.SETTINGS_LABEL_TEXT
-                 ).grid(row=settings_header_rows, column=0,
+                 ).grid(row=self.settings_header_rows, column=0,
                         columnspan=MainMenu.INFINITY, sticky="nsew")
-        settings_header_rows += 1
+        self.settings_header_rows += 1
         ttk.Separator(self.settings_frame, orient="horizontal"
-                      ).grid(row=settings_header_rows, column=0, columnspan=MainMenu.INFINITY,
-                             sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
-        settings_header_rows += 1
+                      ).grid(row=self.settings_header_rows, column=0, sticky="ew",
+                             columnspan=MainMenu.INFINITY, pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
+        self.settings_header_rows += 1
 
-        ## General Settings
-        row = settings_header_rows
+    def _create_settings_general(self):
+        row = self.settings_header_rows
         tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.GENERAL_SETTINGS_LABEL_TEXT
                  ).grid(row=row, column=0, columnspan=MainMenu.SETTINGS_GROUP1_COLS,
@@ -370,10 +374,11 @@ class MainMenu:
                      font=MainMenu.SETTINGS_FONT_BOLD, bg=MainMenu.BG_COLOR, fg=MainMenu.RED
                      ).grid(row=row, column=2, sticky="nsew")
             row += 1
-        general_settings_rows = row - settings_header_rows
+        self.general_settings_rows = row - self.settings_header_rows
 
-        ## Light / Dark mode
-        row = settings_header_rows + general_settings_rows
+    def _create_settings_ui(self):
+        # Light / Dark mode
+        row = self.settings_header_rows + self.general_settings_rows
         ttk.Separator(self.settings_frame, orient="horizontal"
                       ).grid(row=row, column=0, sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y,
                              columnspan=MainMenu.SETTINGS_GROUP1_COLS)
@@ -388,10 +393,10 @@ class MainMenu:
         ttk.Checkbutton(self.settings_frame, variable=self.dark_mode_var
                         ).grid(row=row, column=1, sticky="nsew")
         row += 1
-        group1_rows = row - settings_header_rows
+        self.group1_rows = row - self.settings_header_rows
 
-        ## Bots
-        row = settings_header_rows
+    def _create_settings_bots(self):
+        row = self.settings_header_rows
         start_col = MainMenu.SETTINGS_GROUP1_COLS + 1
         tk.Label(self.settings_frame, fg=MainMenu.RED, anchor="w", bg=MainMenu.BG_COLOR,
                  font=MainMenu.SETTINGS_FONT_BOLD, text=MainMenu.BOT_SETTINGS_LABEL_TEXT
@@ -402,7 +407,7 @@ class MainMenu:
                  font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW
                  ).grid(row=row, column=start_col, sticky="nsew")
         self.player_selector = ttk.OptionMenu(self.settings_frame, self.currently_selected_player,
-                                              *range(1, MainMenu.MAX_PLAYERS + 1))
+                                              "1", *range(1, MainMenu.MAX_PLAYERS + 1))
         self.player_selector.grid(row=row, column=start_col + 1, sticky="nsew")
         row += 1
         tk.Label(self.settings_frame, anchor="w", text=MainMenu.ASSIGNED_BOT_TEXT,
@@ -416,34 +421,39 @@ class MainMenu:
         self.bot_selector.grid(row=row, column=start_col, sticky="nsew",
                                columnspan=MainMenu.SETTINGS_GROUP2_COLS)
         row += 1
-        tk.Label(self.settings_frame, anchor="w", text=MainMenu.BOT_EXPLANATION_TEXT,
-                    font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.RED,
-                    wraplength=400 * MainMenu.SETTINGS_REL_WIDTH, justify="left"
-                    ).grid(row=row, column=start_col, columnspan=MainMenu.SETTINGS_GROUP2_COLS,
-                            sticky="nsew")
-        group2_rows = row - settings_header_rows
+        tk.Label(self.settings_frame, text=MainMenu.BOT_EXPLANATION_TEXT, justify="left",
+                 font=MainMenu.SETTINGS_FONT, bg=MainMenu.BG_COLOR, fg=MainMenu.YELLOW, anchor="w"
+                 ).grid(row=row, column=start_col, columnspan=MainMenu.SETTINGS_GROUP2_COLS,
+                        sticky="nsew", rowspan=3)
+        row += 3
+        self.group2_rows = row - self.settings_header_rows
 
-        ## Separator between general, ui and bot settings
+    def _create_settings_separators(self):
+        # Separator between general, ui and bot settings
         ttk.Separator(self.settings_frame, orient="vertical"
-                      ).grid(row=settings_header_rows, column=MainMenu.SETTINGS_GROUP1_COLS,
-                             rowspan=max(group1_rows, group2_rows), sticky="ns")
+                      ).grid(row=self.settings_header_rows, column=MainMenu.SETTINGS_GROUP1_COLS,
+                             rowspan=max(self.group1_rows, self.group2_rows), sticky="ns")
 
-        ## Separator between settings and start game button
-        row = settings_header_rows + max(group1_rows, group2_rows)
+        # Separator between settings and start game button
+        row = self.settings_header_rows + max(self.group1_rows, self.group2_rows)
         ttk.Separator(self.settings_frame, orient="horizontal"
                       ).grid(row=row, column=0, columnspan=MainMenu.INFINITY,
                              sticky="ew", pady=MainMenu.HORIZONTAL_SEP_PAD_Y)
 
-        # Start button
+    def _create_start_game_button(self):
         tk.Button(self.root, text=MainMenu.START_GAME_TEXT, font=MainMenu.GAME_START_FONT,
                   bg=MainMenu.YELLOW, fg=MainMenu.RED, command=self._start_game
                   ).place(anchor="center", relx=0.5, rely=MainMenu.START_GAME_REL_Y,
                           relwidth=MainMenu.GAME_START_REL_WIDTH,
                           relheight=MainMenu.GAME_START_REL_HEIGHT)
 
-        # Run the main loop
-        self.root.mainloop()
+    def __init__(self):
+        self._create_root()
+        self._create_title()
+        self._create_settings()
+        self._create_start_game_button()
 
+        self.root.mainloop()
 
     def _start_game(self):
         settings = {key: var.get() for key, var in self.settings_var.items()}
@@ -679,9 +689,10 @@ class Game(BaseGame):
             n_connect (int, optional): The number of tiles a player needs to connect to win.
                     Defaults to 4.
             n_players (int, optional): The number of players in the game. Defaults to 2.
-            bots (tp.Dict[int, Bot], optional): A dictionary mapping player ids to
-                    bot objects. Defaults to {} for no bots. The same bot can be used
-                    for multiple players.
+            bots (tp.Dict[int, Bot], optional): A dictionary mapping player ids
+                    (numbers from 1 to n_players) bot objects. Defaults to {} for no bots.
+                    The same bot can be used for multiple players. Players without a bot assigned
+                    will be controlled from the GUI.
             game_state (tp.Optional[GameState], optional):
                     The state of the game to start from. Defaults to None for a new game.
                     See BaseGame class for details.
@@ -692,7 +703,7 @@ class Game(BaseGame):
         super().__init__(n_cols, n_rows, n_connect, n_players)
         self.bots = bots
         for bot in bots.values():
-            if isinstance(bot, CachingAlphaBetaBot):
+            if isinstance(bot, CachedMinimaxBot):
                 bot.init_from_game(self)
         self.gui = GUI(self, **gui_kwargs)
         if game_state is not None:
@@ -799,7 +810,8 @@ class RandomBot(Bot):
         while not game.place(randint(0, game.n_cols - 1)):
             pass
 
-class CachingAlphaBetaBot(Bot):
+
+class CachedMinimaxBot(Bot):
     """ A bot that uses the Alpha-Beta Pruning modified Minimax algorithm to make moves.
         This bot is able to play in games with more than 2 players. It caches some of the
         results of the search to speed up the computation using a least-recently-used cache. """
@@ -999,28 +1011,40 @@ class CachingAlphaBetaBot(Bot):
 BOT_OPTIONS = {
     "none (real player)": None,
     "random placer": RandomBot(),
-    "strong solver 13": CachingAlphaBetaBot(max_depth=13),
-    "strong solver 15": CachingAlphaBetaBot(max_depth=15),
-    "strong solver 16": CachingAlphaBetaBot(max_depth=16),
-    "strong solver 17": CachingAlphaBetaBot(max_depth=17),
-    "strong solver 18": CachingAlphaBetaBot(max_depth=18),
-    "strong solver 19": CachingAlphaBetaBot(max_depth=19),
-    "strong solver unlimited": CachingAlphaBetaBot(max_depth=-1),
-    "weak solver 13": CachingAlphaBetaBot(max_depth=13, initial_alpha=-1, initial_beta=1),
-    "weak solver 15": CachingAlphaBetaBot(max_depth=15, initial_alpha=-1, initial_beta=1),
-    "weak solver 17": CachingAlphaBetaBot(max_depth=17, initial_alpha=-1, initial_beta=1),
-    "weak solver 18": CachingAlphaBetaBot(max_depth=18, initial_alpha=-1, initial_beta=1),
-    "weak solver 19": CachingAlphaBetaBot(max_depth=19, initial_alpha=-1, initial_beta=1),
-    "weak solver 20": CachingAlphaBetaBot(max_depth=20, initial_alpha=-1, initial_beta=1),
-    "weak solver 21": CachingAlphaBetaBot(max_depth=21, initial_alpha=-1, initial_beta=1),
-    "weak solver unlimited": CachingAlphaBetaBot(max_depth=-1, initial_alpha=-1, initial_beta=1),
+    "strong solver 9": CachedMinimaxBot(max_depth=9),
+    "strong solver 10": CachedMinimaxBot(max_depth=10),
+    "strong solver 11": CachedMinimaxBot(max_depth=11),
+    "strong solver 12": CachedMinimaxBot(max_depth=12),
+    "strong solver 13": CachedMinimaxBot(max_depth=13),
+    "strong solver 14": CachedMinimaxBot(max_depth=14),
+    "strong solver 15": CachedMinimaxBot(max_depth=15),
+    "strong solver 16": CachedMinimaxBot(max_depth=16),
+    "strong solver 17": CachedMinimaxBot(max_depth=17),
+    "strong solver 18": CachedMinimaxBot(max_depth=18),
+    "strong solver 19": CachedMinimaxBot(max_depth=19),
+    "strong solver unlimited": CachedMinimaxBot(max_depth=-1),
+    "weak solver 7": CachedMinimaxBot(max_depth=7, initial_alpha=-1, initial_beta=1),
+    "weak solver 8": CachedMinimaxBot(max_depth=8, initial_alpha=-1, initial_beta=1),
+    "weak solver 9": CachedMinimaxBot(max_depth=9, initial_alpha=-1, initial_beta=1),
+    "weak solver 10": CachedMinimaxBot(max_depth=10, initial_alpha=-1, initial_beta=1),
+    "weak solver 11": CachedMinimaxBot(max_depth=11, initial_alpha=-1, initial_beta=1),
+    "weak solver 12": CachedMinimaxBot(max_depth=12, initial_alpha=-1, initial_beta=1),
+    "weak solver 13": CachedMinimaxBot(max_depth=13, initial_alpha=-1, initial_beta=1),
+    "weak solver 14": CachedMinimaxBot(max_depth=14, initial_alpha=-1, initial_beta=1),
+    "weak solver 15": CachedMinimaxBot(max_depth=15, initial_alpha=-1, initial_beta=1),
+    "weak solver 16": CachedMinimaxBot(max_depth=16, initial_alpha=-1, initial_beta=1),
+    "weak solver 17": CachedMinimaxBot(max_depth=17, initial_alpha=-1, initial_beta=1),
+    "weak solver 18": CachedMinimaxBot(max_depth=18, initial_alpha=-1, initial_beta=1),
+    "weak solver 19": CachedMinimaxBot(max_depth=19, initial_alpha=-1, initial_beta=1),
+    "weak solver 20": CachedMinimaxBot(max_depth=20, initial_alpha=-1, initial_beta=1),
+    "weak solver 21": CachedMinimaxBot(max_depth=21, initial_alpha=-1, initial_beta=1),
+    "weak solver unlimited": CachedMinimaxBot(max_depth=-1, initial_alpha=-1, initial_beta=1),
 }
 
 
 #############################################################
 #                          TESTING                          #
 #############################################################
-
 
 if __name__ == "__main__":
     MainMenu()
